@@ -1,0 +1,48 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <SupportedOSPlatformVersion>7.0</SupportedOSPlatformVersion>
+    <PackageIcon>Erebus.png</PackageIcon>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <Copyright>Whispergate 2025</Copyright>
+    <Description>Erebus ClickOnce Loader</Description>
+    <PackageProjectUrl>https://github.com/Whispergate/Erebus.Loaders</PackageProjectUrl>
+    <RepositoryType>git</RepositoryType>
+    <ApplicationIcon>Erebus.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Erebus.svg" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Erebus.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\Assets\Erebus.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="ErebusRsrc.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>ErebusRsrc.resx</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Update="ErebusRsrc.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>ErebusRsrc.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+  </ItemGroup>
+
+</Project>
