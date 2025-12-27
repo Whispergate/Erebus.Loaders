@@ -71,6 +71,10 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(ProjectDir)include;$(IncludePath)</IncludePath>
+    <SourcePath>$(VC_SourcePath);$(ProjectDir)src;$(SourcePath)</SourcePath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -117,31 +121,32 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClCompile Include="loader.cpp" />
-    <ClCompile Include="main.cpp" />
-    <ClCompile Include="syswhispers3.c" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="config.hpp" />
-    <ClInclude Include="loader.hpp" />
-    <ClInclude Include="resource.h" />
-    <ClInclude Include="syswhispers3.h" />
-  </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Erebus.Loader.rc" />
   </ItemGroup>
   <ItemGroup>
     <None Include="erebus.bin" />
-    <MASM Include="syswhispers3-asm.x64.asm">
-      <FileType>Document</FileType>
-    </MASM>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\config.hpp" />
+    <ClInclude Include="include\loader.hpp" />
+    <ClInclude Include="include\resource.h" />
+    <ClInclude Include="include\syswhispers3.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\loader.cpp" />
+    <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\syswhispers3.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="src\syswhispers3-asm.x64.asm" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

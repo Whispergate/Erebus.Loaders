@@ -106,10 +106,12 @@ namespace erebus {
 	PVOID StageResource(IN int resource_id, IN LPCWSTR resource_class, OUT PSIZE_T shellcode_size);
 
 	PVOID WriteShellcodeInMemory(IN HANDLE handle, IN PVOID shellcode, IN SIZE_T shellcode_size);
+	PVOID WriteShellcodeInMemory(IN HANDLE handle, IN BYTE* shellcode, IN SIZE_T shellcode_size);
 
 	BOOL CreateProcessSuspended(IN wchar_t cmd[], OUT HANDLE* process_handle, OUT HANDLE* thread_handle);
 
 	VOID InjectionNtQueueApcThread(IN PVOID shellcode, IN SIZE_T shellcode_size, IN HANDLE hProcess, IN HANDLE hThread);
+	VOID InjectionNtQueueApcThread(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE hProcess, IN HANDLE hThread);
 } // End of erebus namespace
 
 #endif
