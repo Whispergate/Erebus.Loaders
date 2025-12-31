@@ -50,6 +50,7 @@ endif
 # Find source and header files (include both root and subdirectories)
 SRCS := $(wildcard $(SRC)/*.cpp) $(wildcard $(SRC)/**/*.cpp)
 HDRS := $(wildcard $(INC)/*.h) $(wildcard $(INC)/**/*.h)
+HDRS2 := $(wildcard $(INC)/*.hpp) $(wildcard $(INC)/**/*.hpp)
 OBJS := $(patsubst $(SRC)/%.cpp, $(OBJ)/%.o, $(SRCS))
 
 # Configure PKG_CONFIG
@@ -84,7 +85,7 @@ $(BIN)/$(TARGET): $(OBJS)
 	@$(FILE_FLAG)
 	
 # Rule to create object files
-$(OBJ)/%.o: $(SRC)/%.cpp $(HDRS)
+$(OBJ)/%.o: $(SRC)/%.cpp $(HDRS) $(HDRS2)
 	@$(call MKDIR,$(dir $@))
 	@$(CXX) $(CXXFLAGS) -c $< -o $@
 
