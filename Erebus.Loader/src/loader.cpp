@@ -1,7 +1,7 @@
 #include "loader.hpp"
 
 namespace erebus {
-	erebus::Config erebus::config{};
+	Config config{};
 
 	VOID DecompressionLZNT(_Inout_ BYTE* Input, IN SIZE_T InputLen)
 	{
