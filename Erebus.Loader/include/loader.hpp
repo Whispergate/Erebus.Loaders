@@ -3,7 +3,6 @@
 #pragma once
 #include <windows.h>
 #include "resource.h"
-#include "key.hpp"
 #include "syswhispers3.h"
 
 #pragma region [typedefs]

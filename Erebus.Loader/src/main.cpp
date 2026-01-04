@@ -1,3 +1,4 @@
+#include "key.hpp"
 #include "loader.hpp"
 #include "config.hpp"
 

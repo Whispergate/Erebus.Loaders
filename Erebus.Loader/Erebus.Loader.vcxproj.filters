@@ -23,6 +23,7 @@
     <None Include="erebus.bin">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="Makefile" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\config.hpp">
@@ -56,5 +57,8 @@
     <MASM Include="src\syswhispers3-asm.x64.asm">
       <Filter>Source Files</Filter>
     </MASM>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="CMakeLists.txt" />
   </ItemGroup>
 </Project>
