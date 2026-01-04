@@ -13,7 +13,7 @@ set(PAYLOAD_OUT  ${CMAKE_CURRENT_SOURCE_DIR}/payload)
 file(GLOB_RECURSE SOURCES ${SRC_DIR}/*.c ${SRC_DIR}/*.cpp ${SRC_DIR}/*.asm)
 include_directories(${INC_DIR})
 
-enable_language(C ASM_MASM)
+# enable_language(C ASM_MASM)
 
 add_executable(erebus_loader WIN32 ${SOURCES})
 set_target_properties(erebus_loader PROPERTIES
