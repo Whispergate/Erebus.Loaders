@@ -4,7 +4,7 @@ ifeq ($(BUILD),debug)
 	CFLAGS  := -g -O0 -DDEBUG -Wall -I$(PWD)/include -I/usr/x86_64-w64-mingw32/include
 	LDFLAGS := -s -static -static-libgcc -static-libstdc++
 else
-	CFLAGS  := -Wall -O2 -I$(PWD)/include -I/usr/x86_64-w64-mingw32/include -masm=intel
+	CFLAGS  := -DNDEBUG -O2 -Wall -I$(PWD)/include -I/usr/x86_64-w64-mingw32/include -masm=intel
 	LDFLAGS := -s -static -static-libgcc -static-libstdc++
 endif
 
