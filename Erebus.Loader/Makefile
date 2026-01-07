@@ -11,7 +11,11 @@ endif
 CC      := x86_64-w64-mingw32-g++
 SRCS := $(wildcard src/*.c src/*.cpp)
 OBJS := $(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS)))
+RES      := Erebus.Loader.res
 OUT  := $(PWD)erebus.exe
+
+$(RES): Erebus.Loader.rc erebus.bin
+	$(WINDRES) $< -O coff -o $@
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -19,11 +23,11 @@ OUT  := $(PWD)erebus.exe
 %.o: %.cpp
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OUT): $(OBJS)
+$(OUT): $(OBJS) $(RES)
 	$(CC) $(LDFLAGS) $^ -o $@
 
 all: $(OUT)
 clean:
-	rm -f src/*.o $(OUT)
+	rm -f src/*.o $(RES) $(OUT)
 
 .PHONY: all clean
