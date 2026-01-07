@@ -2,10 +2,10 @@ BUILD	?= release
 
 ifeq ($(BUILD),debug)
 	CFLAGS  := -g -O0 -DDEBUG -Wall -I$(PWD)/include -I/usr/x86_64-w64-mingw32/include
-	LDFLAGS := -s -m64 -static -static-libgcc -static-libstdc++
+	LDFLAGS := -s -static -static-libgcc -static-libstdc++
 else
-	CFLAGS  := -Wall -O2 -I$(PWD)/include -I/usr/x86_64-w64-mingw32/include -masm=intel -m64
-	LDFLAGS := -s -m64 -static -static-libgcc -static-libstdc++
+	CFLAGS  := -Wall -O2 -I$(PWD)/include -I/usr/x86_64-w64-mingw32/include -masm=intel
+	LDFLAGS := -s -static -static-libgcc -static-libstdc++
 endif
 
 CC      := x86_64-w64-mingw32-g++
