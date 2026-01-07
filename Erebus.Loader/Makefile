@@ -1,18 +1,22 @@
-CC      := x86_64-w64-mingw32-gcc
-CFLAGS  := -Wall -O2 -I$(PWD)/include
-LDFLAGS := -s
+CC      := x86_64-w64-mingw32-g++
+CFLAGS  := -Wall -O2 -I$(PWD)/include -I/usr/x86_64-w64-mingw32/include -masm=intel -m64
+LDFLAGS := -s -m64 -static -static-libgcc -static-libstdc++
 
-SRCS   := $(wildcard src/*)
-INCL   := $(wildcard include/*)
-OBJS   := $(SRCS:.c=.o)
-OUT    := $(PWD)/../../agent_code/payload/erebus.exe
+SRCS := $(wildcard src/*.c src/*.cpp)
+OBJS := $(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS)))
+OUT  := $(PWD)erebus.exe
 
-$(OBJS): src/%.o: src/%.c : src/%.cpp
+# compile C sources
+%.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# compile C++ sources
+%.o: %.cpp
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# link
 $(OUT): $(OBJS)
 	$(CC) $(LDFLAGS) $^ -o $@
-	@echo "[+] PE written to $(OUT)"
 
 all: $(OUT)
 clean:
