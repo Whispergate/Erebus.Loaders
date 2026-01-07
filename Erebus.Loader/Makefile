@@ -9,6 +9,7 @@ else
 endif
 
 CC      := x86_64-w64-mingw32-g++
+WINDRES := x86_64-w64-mingw32-windres
 SRCS := $(wildcard src/*.c src/*.cpp)
 OBJS := $(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS)))
 RES      := Erebus.Loader.res
