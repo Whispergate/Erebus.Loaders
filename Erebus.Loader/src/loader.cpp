@@ -1,4 +1,4 @@
-#include "loader.hpp"
+#include "../include/loader.hpp"
 
 namespace erebus {
 	Config config{};

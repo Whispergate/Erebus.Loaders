@@ -1,6 +1,6 @@
-#include "key.hpp"
-#include "loader.hpp"
-#include "config.hpp"
+#include "../include/key.hpp"
+#include "../include/loader.hpp"
+#include "../include/config.hpp"
 
 VOID entry(void)
 {
@@ -33,6 +33,22 @@ int main()
 {
 	entry();
 	return 0;
+}
+
+#elif _WINDLL
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
+{
+	switch (ul_reason_for_call)
+	{
+	case DLL_PROCESS_ATTACH:
+		entry();
+		break;
+	case DLL_THREAD_ATTACH:
+	case DLL_THREAD_DETACH:
+	case DLL_PROCESS_DETACH:
+		break;
+	}
+	return TRUE;
 }
 
 #else

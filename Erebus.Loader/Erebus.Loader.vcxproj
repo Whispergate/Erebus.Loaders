@@ -146,6 +146,7 @@
     <ClInclude Include="include\loader.hpp" />
     <ClInclude Include="include\resource.h" />
     <ClInclude Include="include\syswhispers3.h" />
+    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\loader.cpp" />

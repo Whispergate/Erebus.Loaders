@@ -15,7 +15,7 @@ OBJS := $(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS)))
 RES      := Erebus.Loader.res
 OUT  := $(PWD)erebus.exe
 
-$(RES): Erebus.Loader.rc erebus.bin
+$(RES): Erebus.Loader.rc
 	$(WINDRES) $< -O coff -o $@
 
 %.o: %.c
