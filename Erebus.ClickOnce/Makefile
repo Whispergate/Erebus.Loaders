@@ -2,8 +2,13 @@ PROJECT := Erebus.ClickOnce.csproj
 PUBPROFILE := Properties/PublishProfiles/ClickOnce.pubxml
 TFM := net7.0-windows
 RID ?= win-x64
+CONFIG ?= Release
 
-.PHONY: debug release publish clean
+.PHONY: publish debug release clean all
+
+all: debug release
+
+publish: release
 
 debug:
 	dotnet publish $(PROJECT) \
@@ -15,11 +20,9 @@ debug:
 release:
 	dotnet publish $(PROJECT) \
 		/p:PublishProfile=$(PUBPROFILE) \
-		/p:Configuration=Release \
+		/p:Configuration=$(CONFIG) \
 		/p:TargetFramework=$(TFM) \
 		/p:RuntimeIdentifier=$(RID)
-
-publish: release
 
 clean:
 	rm -rf bin obj
