@@ -1,6 +1,6 @@
 PROJECT := Erebus.ClickOnce.csproj
 PUBPROFILE := Properties/PublishProfiles/ClickOnce.pubxml
-TFM := net8.0-windows
+TFM := net7.0-windows
 RID ?= win-x64
 
 .PHONY: debug release publish clean
