@@ -52,6 +52,8 @@ typedef NTSTATUS(NTAPI* typeRtlDecompressBuffer)(
 #define FLG_HEAP_ENABLE_FREE_CHECK   0x20
 #define FLG_HEAP_VALIDATE_PARAMETERS 0x40
 
+#define WORKER_FACTORY_ALL_ACCESS 0xF00FF
+
 #define LCG_A 1664525     // Multiplier (random choice, can be tuned)
 #define LCG_C 1013904223  // Increment (random choice, can be tuned)
 #define LCG_M 4294967296  // Modulus (2^32, typical for 32-bit PRNGs)
@@ -126,6 +128,12 @@ namespace erebus {
 	VOID InjectionNtMapViewOfSection(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
 
 	VOID InjectionNtQueueApcThread(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
+
+	VOID InjectionCreateFiber(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
+
+	VOID InjectionEarlyCascade(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
+
+	VOID InjectionPoolParty(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
 } // End of erebus namespace
 
 #endif

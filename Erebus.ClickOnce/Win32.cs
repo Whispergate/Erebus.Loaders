@@ -201,7 +201,7 @@ namespace Erebus.ClickOnce
 
             public bool Equals(BOOL other) => Value == other.Value;
 
-            public override bool Equals(object obj) => obj is BOOL other && Equals(other);
+            public override bool Equals(object? obj) => obj is BOOL other && Equals(other);
 
             public override int GetHashCode() => Value.GetHashCode();
 
@@ -227,7 +227,7 @@ namespace Erebus.ClickOnce
 
             public bool Equals(HANDLE other) => Value == other.Value;
 
-            public override bool Equals(object obj) => obj is HANDLE other && Equals(other);
+            public override bool Equals(object? obj) => obj is HANDLE other && Equals(other);
 
             public override int GetHashCode() => Value.GetHashCode();
 

