@@ -43,16 +43,12 @@ typedef NTSTATUS(NTAPI* typeRtlDecompressBuffer)(
 
 #pragma region [macros]
 
-#ifndef NOMINMAX
-
 #ifndef max
 #define max(a,b)            (((a) > (b)) ? (a) : (b))
 #endif
 
 #ifndef min
 #define min(a,b)            (((a) < (b)) ? (a) : (b))
-#endif
-
 #endif
 
 #define NT_SUCCESS(Status) ((NTSTATUS)(Status) >= 0)
@@ -128,6 +124,28 @@ namespace erebus {
 	extern Config config;
 
 	VOID DecompressionLZNT(_Inout_ BYTE* Input, IN SIZE_T InputLen);
+
+	VOID DecompressionRLE(_Inout_ BYTE* Input, IN SIZE_T InputLen, OUT SIZE_T* OutputLen);
+
+	BYTE DecodeBASE64Char(CHAR c);
+
+	BOOL IsValidBase64Char(CHAR c);
+
+	BOOL IsValidASCII85Char(CHAR c);
+
+	BOOL IsValidALPHA32Char(CHAR c);
+
+	BOOL IsValidWORDS256Format(_In_ const CHAR* Input, IN SIZE_T InputLen);
+
+	BOOL DecodeASCII85(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen);
+
+	BOOL DecodeALPHA32(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen);
+
+	BOOL DecodeWORDS256(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen);
+
+	VOID AutoDetectAndDecode(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen);
+
+	VOID AutoDetectAndDecodeString(_In_ CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen);
 
 	VOID DecryptionXOR(_Inout_ BYTE* Input, IN SIZE_T InputLen, IN BYTE* Key, IN SIZE_T KeyLen);
 
