@@ -2,6 +2,7 @@
 #define EREBUS_LOADER_HPP
 #pragma once
 #include <windows.h>
+#include <intrin.h>
 #include "config.hpp"
 
 // Define missing SAL annotations for compatibility
