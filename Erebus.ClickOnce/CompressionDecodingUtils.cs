@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.InteropServices;
 
 namespace Erebus.ClickOnce
@@ -130,7 +129,7 @@ namespace Erebus.ClickOnce
             {
                 // Remove whitespace
                 string cleaned = System.Text.RegularExpressions.Regex.Replace(data, @"\s+", "");
-                
+
                 // Check if it only contains valid Base64 characters
                 if (!System.Text.RegularExpressions.Regex.IsMatch(cleaned, @"^[A-Za-z0-9+/]*={0,2}$"))
                     return false;
@@ -174,7 +173,7 @@ namespace Erebus.ClickOnce
                 return false;
 
             const string Alpha32Alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/";
-            
+
             foreach (char c in data)
             {
                 if (!Alpha32Alphabet.Contains(c.ToString()))
@@ -192,7 +191,7 @@ namespace Erebus.ClickOnce
                 return false;
 
             string[] words = data.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-            
+
             if (words.Length == 0)
                 return false;
 
@@ -402,7 +401,7 @@ namespace Erebus.ClickOnce
                 using (var output = new System.IO.MemoryStream())
                 {
                     string[] words = input.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-                    
+
                     foreach (string word in words)
                     {
                         if (int.TryParse(word, out int wordIndex) && wordIndex >= 0 && wordIndex <= 255)

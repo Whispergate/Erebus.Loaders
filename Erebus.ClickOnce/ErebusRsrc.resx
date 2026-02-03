@@ -121,7 +121,4 @@
   <data name="Erebus" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>Resources\Erebus.ico;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </data>
-  <data name="erebus_bin" type="System.Resources.ResXFileRef, System.Windows.Forms">
-    <value>Resources\erebus.bin;System.Byte[], mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
-  </data>
 </root>

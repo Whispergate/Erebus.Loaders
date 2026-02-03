@@ -69,15 +69,5 @@ namespace Erebus.ClickOnce {
                 return ((byte[])(obj));
             }
         }
-        
-        /// <summary>
-        ///   Looks up a localized resource of type System.Byte[].
-        /// </summary>
-        internal static byte[] erebus_bin {
-            get {
-                object obj = ResourceManager.GetObject("erebus_bin", resourceCulture);
-                return ((byte[])(obj));
-            }
-        }
     }
 }

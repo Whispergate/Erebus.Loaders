@@ -14,6 +14,16 @@
     <PackageProjectUrl>https://github.com/Whispergate/Erebus.Loaders</PackageProjectUrl>
     <RepositoryType>git</RepositoryType>
     <ApplicationIcon>Erebus.ico</ApplicationIcon>
+    
+    <!-- Optimizations for minimal ClickOnce payload -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <PublishTrimmed>true</PublishTrimmed>
+    <PublishReadyToRun>false</PublishReadyToRun>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
 
   <ItemGroup>
@@ -44,6 +54,11 @@
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>ErebusRsrc.Designer.cs</LastGenOutput>
     </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Preserve reflection-based injection methods from trimming -->
+    <TrimmerRootAssembly Include="Erebus.ClickOnce" />
   </ItemGroup>
 
 </Project>

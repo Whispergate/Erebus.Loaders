@@ -8,7 +8,7 @@ namespace Erebus.ClickOnce
         // ============================================
         // INJECTION CONFIGURATION
         // ============================================
-        
+
         /// <summary>
         /// Select injection method:
         /// - "createfiber"    : Fiber-based self-injection
@@ -16,8 +16,9 @@ namespace Erebus.ClickOnce
         /// - "poolparty"      : Worker Factory thread pool injection (remote)
         /// - "classic"        : Classic CreateRemoteThread injection (remote)
         /// - "enumdesktops"   : EnumDesktops callback injection (self)
+        /// - "appdomain"      : AppDomain injection for .NET assemblies (self)        
         /// </summary>
-        public static string InjectionMethod = "createfiber";
+        public static string InjectionMethod = "appdomain";
 
         /// <summary>
         /// Target Process ID for remote injection methods.
@@ -36,5 +37,10 @@ namespace Erebus.ClickOnce
         /// Leave empty for no encryption
         /// </summary>
         public static byte[] EncryptionKey = new byte[] { };
+
+        /// <summary>
+        /// Shellcode Byte Array
+        /// </summary>
+        public static byte[] Shellcode = new byte[] { };
     }
 }

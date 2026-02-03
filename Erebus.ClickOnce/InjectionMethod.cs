@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.Versioning;
 
 namespace Erebus.ClickOnce

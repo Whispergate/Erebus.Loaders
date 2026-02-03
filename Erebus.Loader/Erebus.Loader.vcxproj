@@ -142,19 +142,14 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\config.hpp" />
-    <ClInclude Include="include\key.hpp" />
     <ClInclude Include="include\loader.hpp" />
     <ClInclude Include="include\resource.h" />
-    <ClInclude Include="include\syswhispers3.h" />
+    <ClInclude Include="include\shellcode.hpp" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\loader.cpp" />
     <ClCompile Include="src\main.cpp" />
-    <ClCompile Include="src\syswhispers3.c" />
-  </ItemGroup>
-  <ItemGroup>
-    <MASM Include="src\syswhispers3-asm.x64.asm" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

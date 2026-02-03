@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Reflection.Metadata;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Security.Permissions;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace Erebus.ClickOnce
 {
@@ -116,13 +110,13 @@ namespace Erebus.ClickOnce
             MEM_FREE = 0x00010000,
         }
 
-        [DllImport("kernel32.dll", EntryPoint = "#138", CharSet = CharSet.Unicode, SetLastError = true)]
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         public static extern bool CloseHandle(IntPtr hObject);
 
-        [DllImport("kernel32.dll", EntryPoint = "#233", CharSet = CharSet.Unicode, SetLastError = true)]
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         public static extern bool CreateProcess(
             string applicationName,
-            string commandLine,
+            StringBuilder commandLine,
             IntPtr processAttributes,
             IntPtr threadAttributes,
             bool inheritHandles,
@@ -132,18 +126,18 @@ namespace Erebus.ClickOnce
             ref STARTUPINFO startupInfo,
             out PROCESS_INFORMATION processInformation);
 
-        [DllImport("KERNEL32.dll", EntryPoint = "#235", ExactSpelling = true, SetLastError = true)]
+        [DllImport("KERNEL32.dll", ExactSpelling = true, SetLastError = true)]
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         public static extern unsafe HANDLE CreateRemoteThread(
             HANDLE hProcess,
             [Optional] SECURITY_ATTRIBUTES* lpThreadAttributes,
             nuint dwStackSize,
-            LPTHREAD_START_ROUTINE lpStartAddress,
+            IntPtr lpStartAddress, // Fixed: Use IntPtr instead of delegate
             [Optional] void* lpParameter,
             THREAD_CREATION_FLAGS dwCreationFlags,
             [Optional] uint* lpThreadId);
 
-        [DllImport("KERNEL32.dll", EntryPoint = "#246", ExactSpelling = true, SetLastError = true)]
+        [DllImport("KERNEL32.dll", ExactSpelling = true, SetLastError = true)]
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         public static extern unsafe HANDLE CreateThread(
             [Optional] SECURITY_ATTRIBUTES* lpThreadAttributes,
@@ -156,11 +150,11 @@ namespace Erebus.ClickOnce
         [DllImport("user32.dll")]
         public static extern bool EnumDesktops(IntPtr hwinsta, IntPtr lpEnumFunc, IntPtr lParam);
 
-        [DllImport("KERNEL32.dll", EntryPoint = "#545", ExactSpelling = true)]
+        [DllImport("KERNEL32.dll", ExactSpelling = true)]
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        public static extern HANDLE GetCurrentProcess();
+        public static extern IntPtr GetCurrentProcess();
 
-        [DllImport("KERNEL32.dll", EntryPoint = "#1500", ExactSpelling = true, SetLastError = true)]
+        [DllImport("KERNEL32.dll", ExactSpelling = true, SetLastError = true)]
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         public static extern unsafe IntPtr VirtualAllocEx(
             HANDLE hProcess,
@@ -169,7 +163,7 @@ namespace Erebus.ClickOnce
             VIRTUAL_ALLOCATION_TYPE flAllocationType,
             PAGE_PROTECTION_FLAGS flProtect);
 
-        [DllImport("KERNEL32.dll", EntryPoint = "#1584", ExactSpelling = true, SetLastError = true)]
+        [DllImport("KERNEL32.dll", ExactSpelling = true, SetLastError = true)]
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         public static extern unsafe BOOL WriteProcessMemory(
             HANDLE hProcess,
@@ -182,29 +176,16 @@ namespace Erebus.ClickOnce
         public readonly struct BOOL(int value) : IEquatable<BOOL>
         {
             public readonly int Value = value;
-
-            public BOOL(bool value) : this(value ? 1 : 0)
-            {
-            }
-
+            public BOOL(bool value) : this(value ? 1 : 0) { }
             public static explicit operator BOOL(int value) => new(value);
-
             public static implicit operator bool(BOOL value) => value.Value != 0;
-
             public static implicit operator BOOL(bool value) => new(value);
-
             public static implicit operator int(BOOL value) => value.Value;
-
             public static bool operator !=(BOOL left, BOOL right) => !(left == right);
-
             public static bool operator ==(BOOL left, BOOL right) => left.Value == right.Value;
-
             public bool Equals(BOOL other) => Value == other.Value;
-
             public override bool Equals(object? obj) => obj is BOOL other && Equals(other);
-
             public override int GetHashCode() => Value.GetHashCode();
-
             public override string ToString() => $"0x{Value:x}";
         }
 
@@ -212,25 +193,15 @@ namespace Erebus.ClickOnce
         public readonly struct HANDLE(IntPtr value) : IEquatable<HANDLE>
         {
             public readonly IntPtr Value = value;
-
             public static HANDLE Null => default;
-
             public bool IsNull => Value == default;
-
             public static explicit operator HANDLE(IntPtr value) => new(value);
-
             public static implicit operator IntPtr(HANDLE value) => value.Value;
-
             public static bool operator !=(HANDLE left, HANDLE right) => !(left == right);
-
             public static bool operator ==(HANDLE left, HANDLE right) => left.Value == right.Value;
-
             public bool Equals(HANDLE other) => Value == other.Value;
-
             public override bool Equals(object? obj) => obj is HANDLE other && Equals(other);
-
             public override int GetHashCode() => Value.GetHashCode();
-
             public override string ToString() => $"0x{Value:x}";
         }
 
@@ -245,9 +216,11 @@ namespace Erebus.ClickOnce
 
         public struct SECURITY_ATTRIBUTES
         {
+#pragma warning disable CS0649 // Field is assigned by native code
             public BOOL bInheritHandle;
             public unsafe void* lpSecurityDescriptor;
             public uint nLength;
+#pragma warning restore CS0649
         }
 
         [StructLayout(LayoutKind.Sequential)]
