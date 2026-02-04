@@ -3,9 +3,8 @@
 #pragma once
 #include <windows.h>
 #include <intrin.h>
-#include "config.hpp"
-#include <intrin.h>
 #include <cstdlib>
+#include "config.hpp"
 
 // Define missing SAL annotations for compatibility
 #ifndef _In_
