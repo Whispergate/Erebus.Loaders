@@ -59,10 +59,6 @@ endif
 
 SRCS := $(wildcard src/*.c src/*.cpp)
 OBJS := $(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS)))
-RES      := Erebus.Loader.res
-
-$(RES): Erebus.Loader.rc
-	$(WINDRES) $< -O coff -o $@
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -70,7 +66,7 @@ $(RES): Erebus.Loader.rc
 %.o: %.cpp
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OUT): $(OBJS) $(RES)
+$(OUT): $(OBJS) 
 	$(CC) $(LDFLAGS) $^ -o $@
 
 all: $(OUT)
@@ -82,6 +78,6 @@ exe:
 	$(MAKE) TARGET=exe
 
 clean:
-	rm -f src/*.o $(RES) $(PWD)erebus.exe $(PWD)erebus.dll
+	rm -f src/*.o $(PWD)erebus.exe $(PWD)erebus.dll
 
 .PHONY: all dll exe clean

@@ -4,6 +4,8 @@
 #include <windows.h>
 #include <intrin.h>
 #include "config.hpp"
+#include <intrin.h>
+#include <cstdlib>
 
 // Define missing SAL annotations for compatibility
 #ifndef _In_
@@ -2265,13 +2267,27 @@ typedef NTSTATUS(NTAPI* typeRtlCreateUnicodeString)(
 # pragma endregion
 
 typedef VOID(*typeInjectionMethod)(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE hProcess, IN HANDLE hThread);
-
 typedef VOID(*typeDecryptionMethod)(_Inout_ BYTE* Input, IN SIZE_T InputLen, IN BYTE* Key, IN SIZE_T KeyLen);
+typedef VOID(*typeDecompressionMethod)(_Inout_ BYTE** Input, _Inout_ SIZE_T* InputLen);
+typedef BOOL(*typeDecodeMethod)(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen);
+
 
 namespace erebus {
+	enum CompressionFormat {
+		FORMAT_NONE = 0,
+		FORMAT_LZNT1 = 1,
+		FORMAT_RLE = 2,
+		FORMAT_BASE64 = 3,
+		FORMAT_ASCII85 = 4,
+		FORMAT_ALPHA32 = 5,
+		FORMAT_WORDS256 = 6
+	};
+
 	struct Config {
 		typeInjectionMethod injection_method;
 		typeDecryptionMethod decryption_method;
+		typeDecompressionMethod decompression_method;
+		typeDecodeMethod decode_method;
 	};
 
 	extern Config config;

