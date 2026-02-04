@@ -2,6 +2,9 @@
 #define EREBUS_LOADER_HPP
 #pragma once
 #include <windows.h>
+#include <cstdlib>
+#include <intrin.h>
+#include "config.hpp"
 
 // Define missing SAL annotations for compatibility
 #ifndef _In_
@@ -50,11 +53,11 @@
 
 #pragma region [typedefs]
 
-typedef struct _PROCESSOR_NUMBER {
-	USHORT Group;
-	UCHAR  Number;
-	UCHAR  Reserved;
-} PROCESSOR_NUMBER, * PPROCESSOR_NUMBER;
+// typedef struct _PROCESSOR_NUMBER {
+// 	USHORT Group;
+// 	UCHAR  Number;
+// 	UCHAR  Reserved;
+// } PROCESSOR_NUMBER, * PPROCESSOR_NUMBER;
 
 typedef struct _UNICODE_STRING {
 	USHORT Length;
@@ -2351,6 +2354,8 @@ namespace erebus {
 	// LoadLibrary implementation.
 	//
 	HMODULE LoadLibraryC(_In_ PCWSTR dll_name);
+
+	VOID RtlFreeHeapC(_In_ HANDLE HeapHandle, _In_ ULONG Flags, _In_ PVOID HeapBase);
 
 	//
 	// Cleanup Module After Use
