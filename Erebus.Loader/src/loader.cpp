@@ -1,4 +1,7 @@
 #include "../include/loader.hpp"
+#include "../include/config.hpp"
+#include <intrin.h>
+#include <cstdlib>
 
 // NOTE: shellcode.hpp is NOT included here to prevent linker errors.
 
