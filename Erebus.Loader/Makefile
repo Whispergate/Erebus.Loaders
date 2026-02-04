@@ -29,8 +29,6 @@ TARGET	?= exe
 # -fno-exceptions -fno-rtti: Remove C++ runtime dependencies
 COMMON_FLAGS := -Wall -I$(PWD)/include $(MINGW_INCLUDE) \
                 -masm=intel \
-                -ffreestanding \
-                -fno-builtin \
                 -fno-stack-protector \
                 -mno-red-zone \
                 -fno-exceptions \

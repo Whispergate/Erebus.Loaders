@@ -1,9 +1,14 @@
 #ifndef EREBUS_LOADER_HPP
 #define EREBUS_LOADER_HPP
 #pragma once
-#include <windows.h>
+
+// Ensure malloc/free are declared for SIMD headers in windows.h
+#include <stdlib.h>
 #include <cstdlib>
-#include <intrin.h>
+
+// Now include windows (which may include intrin.h/SIMD headers)
+#include <windows.h>
+
 #include "config.hpp"
 
 // Define missing SAL annotations for compatibility

