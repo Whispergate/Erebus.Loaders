@@ -107,40 +107,32 @@ namespace Erebus.ClickOnce
             try
             {
                 string cleaned = Regex.Replace(data, @"\s+", "");
+                if (cleaned.Length % 4 != 0) return false;
                 if (!Regex.IsMatch(cleaned, @"^[A-Za-z0-9+/]*={0,2}$"))
                     return false;
                 
                 byte[] buffer = Convert.FromBase64String(cleaned);
                 return buffer.Length > 0;
             }
-            catch
-            {
-                return false;
-            }
+            catch { return false; }
         }
 
         private static bool IsValidASCII85(string data)
         {
-            if (string.IsNullOrEmpty(data))
-                return false;
-
+            if (string.IsNullOrEmpty(data)) return false;
             int validCharCount = 0;
             foreach (char c in data)
             {
                 if ((c >= 33 && c <= 117) || c == '!' || char.IsWhiteSpace(c))
                     validCharCount++;
             }
-
             return validCharCount > (data.Length * 0.8);
         }
 
         private static bool IsValidALPHA32(string data)
         {
-            if (string.IsNullOrEmpty(data))
-                return false;
-
+            if (string.IsNullOrEmpty(data)) return false;
             const string Alpha32Alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/";
-
             foreach (char c in data)
             {
                 if (!Alpha32Alphabet.Contains(c.ToString()))
@@ -151,14 +143,9 @@ namespace Erebus.ClickOnce
 
         private static bool IsValidWORDS256(string data)
         {
-            if (string.IsNullOrEmpty(data))
-                return false;
-
+            if (string.IsNullOrEmpty(data)) return false;
             string[] words = data.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-
-            if (words.Length == 0)
-                return false;
-
+            if (words.Length == 0) return false;
             foreach (string word in words)
             {
                 if (!int.TryParse(word, out int num) || num < 0 || num > 255)
@@ -201,11 +188,11 @@ namespace Erebus.ClickOnce
         {
             try
             {
-                byte[] output = new byte[input.Length * 2];
+                byte[] output = new byte[input.Length * 6];
                 uint uncompressedSize = 0;
 
                 int status = NtStatusHelper.RtlDecompressBuffer(
-                    1, 
+                    (ushort)2,
                     output,
                     (uint)output.Length,
                     input,
@@ -282,18 +269,14 @@ namespace Erebus.ClickOnce
                 {
                     for (int i = 0; i < input.Length; i += 5)
                     {
-                        if (i + 4 >= input.Length)
-                            break;
-
+                        if (i + 4 >= input.Length) break;
                         uint value = 0;
                         for (int j = 0; j < 5; j++)
                         {
                             char c = input[i + j];
-                            if (c < 33 || c > 117)
-                                continue;
+                            if (c < 33 || c > 117) continue;
                             value = value * 85 + (uint)(c - 33);
                         }
-
                         output.WriteByte((byte)((value >> 24) & 0xFF));
                         output.WriteByte((byte)((value >> 16) & 0xFF));
                         output.WriteByte((byte)((value >> 8) & 0xFF));
@@ -319,8 +302,7 @@ namespace Erebus.ClickOnce
                     foreach (char c in input)
                     {
                         int index = Alpha32Alphabet.IndexOf(c);
-                        if (index >= 0)
-                            output.WriteByte((byte)index);
+                        if (index >= 0) output.WriteByte((byte)index);
                     }
                     return output.ToArray();
                 }
@@ -339,7 +321,6 @@ namespace Erebus.ClickOnce
                 using (var output = new System.IO.MemoryStream())
                 {
                     string[] words = input.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-
                     foreach (string word in words)
                     {
                         if (int.TryParse(word, out int wordIndex) && wordIndex >= 0 && wordIndex <= 255)
@@ -358,11 +339,14 @@ namespace Erebus.ClickOnce
         }
     }
 
+    /// <summary>
+    /// Native method declarations for NTAPI functions
+    /// </summary>
     public static class NtStatusHelper
     {
         [DllImport("ntdll.dll", SetLastError = false)]
         public static extern int RtlDecompressBuffer(
-            uint uncompressedFormat,
+            ushort CompressionFormat,   // FIXED: ushort (0x0002 for LZNT1)
             byte[] uncompressedBuffer,
             uint uncompressedBufferSize,
             byte[] compressedBuffer,
