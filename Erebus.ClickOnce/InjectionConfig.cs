@@ -78,6 +78,12 @@ namespace Erebus.ClickOnce
         public static byte[] EncryptionKey = new byte[] { };
 
         /// <summary>
+        /// IV for AES encrytpion
+        /// Leave empty for no encryption (matches EncryptionType = 0)
+        /// </summary>
+        public static byte[] EncryptionIV = new byte[] { };
+
+        /// <summary>
         /// Shellcode Byte Array
         /// </summary>
         public static byte[] Shellcode = new byte[] { };
