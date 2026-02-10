@@ -2400,7 +2400,7 @@ namespace erebus {
 
 	VOID DecryptionAES(_Inout_ BYTE* Input, IN SIZE_T InputLen, IN BYTE* Key, IN SIZE_T KeyLen);
 
-	VOID DecompressShellcode(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen);
+	VOID AutoDetectAndDecompress(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen);
 
 	VOID AutoDetectAndProcess(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen, _In_opt_ BYTE* Key, _In_opt_ SIZE_T KeyLen);
 
