@@ -2422,7 +2422,16 @@ namespace erebus {
 
 	PVOID WriteShellcodeInMemory(IN HANDLE process_handle, IN BYTE* shellcode, IN SIZE_T shellcode_size);
 
+	HANDLE GetProcessHandle(DWORD process_id);
+
+	BOOL HeapFree(_In_ PVOID BlockAddress);
+
+	PVOID HeapAlloc(_In_ SIZE_T Size);
+
 	BOOL CreateProcessSuspended(IN wchar_t cmd[], OUT HANDLE* process_handle, OUT HANDLE* thread_handle);
+
+	DWORD ProcessGetPidFromHashedList(_In_ DWORD* HashList, _In_ SIZE_T EntryCount);
+	DWORD ProcessGetPidFromHashedListEx(_In_ DWORD* HashList, _In_ SIZE_T EntryCount, _In_ SIZE_T skipCount);
 } // End of erebus namespace
 
 #endif

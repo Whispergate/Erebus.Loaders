@@ -69,17 +69,15 @@ namespace erebus {
 	//
 	HMODULE LoadLibraryC(_In_ PCWSTR dll_name)
 	{
-		HMODULE ntdll = 0;
-
 		UNICODE_STRING unicode_module = { 0 };
 		HANDLE module_handle = INVALID_HANDLE_VALUE;
 		ULONG flags = 0;
 
-		ntdll = ImportModule("ntdll.dll");
+		HMODULE ntdll = GetModuleHandleA("ntdll.dll");
 		if (!ntdll) return NULL;
 
-		ImportFunction(ntdll, RtlInitUnicodeString, typeRtlInitUnicodeString);
-		ImportFunction(ntdll, LdrLoadDll, typeLdrLoadDll);
+		typeRtlInitUnicodeString RtlInitUnicodeString = (typeRtlInitUnicodeString)GetProcAddress(ntdll, "RtlInitUnicodeString");
+		typeLdrLoadDll LdrLoadDll = (typeLdrLoadDll)GetProcAddress(ntdll, "LdrLoadDll");
 
 		RtlInitUnicodeString(&unicode_module, dll_name);
 

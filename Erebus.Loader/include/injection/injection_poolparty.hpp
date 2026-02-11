@@ -24,6 +24,14 @@ namespace erebus {
 #if CONFIG_INJECTION_TYPE == 5
 
 	/**
+	 * @brief Check if a process has an active thread pool (IoCompletion handle)
+	 * Used to validate target before injection
+	 * @param hProcess Handle to target process
+	 * @return TRUE if thread pool exists, FALSE otherwise
+	 */
+	BOOL ProcessHasThreadPool(IN HANDLE hProcess);
+
+	/**
 	 * @brief PoolParty injection using RemoteTpDirectInsertion variant
 	 * 
 	 * This technique hijacks the target's IoCompletion port and queues
