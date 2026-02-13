@@ -2,7 +2,7 @@
 #define EREBUS_INJECTION_NTQUEUEAPCTHREAD_HPP
 #pragma once
 #include <windows.h>
-#include "config.hpp"
+#include "../config.hpp"
 
 namespace erebus {
 #if CONFIG_INJECTION_TYPE == 1

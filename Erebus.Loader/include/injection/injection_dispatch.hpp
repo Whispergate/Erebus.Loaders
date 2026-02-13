@@ -2,6 +2,8 @@
 #define EREBUS_INJECTION_DISPATCH_HPP
 #pragma once
 
+#include "../loader.hpp"
+
 namespace erebus {
 	inline typeInjectionMethod GetInjectionMethod()
 	{
