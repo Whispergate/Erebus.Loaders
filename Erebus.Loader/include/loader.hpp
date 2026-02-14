@@ -2283,6 +2283,22 @@ typedef BOOL(*typeDecodeMethod)(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out
 
 #include "injection/injection_dispatch.hpp"
 
+#ifdef ExecuteShellcode
+#undef ExecuteShellcode
+#endif
+
+#ifdef DecodeShellcode
+#undef DecodeShellcode
+#endif
+
+#ifdef DecompressShellcode
+#undef DecompressShellcode
+#endif
+
+#ifdef DecryptShellcode
+#undef DecryptShellcode
+#endif
+
 namespace erebus {
 	enum CompressionFormat {
 		FORMAT_NONE = 0,
@@ -2404,9 +2420,9 @@ namespace erebus {
 
 	BOOL AutoDetectAndDecodeString(_In_ CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen);
 
-	VOID DecryptionXor(unsigned char* data, size_t len, unsigned char* key, size_t key_len);
+	VOID DecryptionXOR(_Inout_ BYTE* Input, IN SIZE_T InputLen, IN BYTE* Key, IN SIZE_T KeyLen);
 
-	VOID DecryptionRc4(unsigned char* data, size_t len, unsigned char* key, size_t key_len);
+	VOID DecryptionRC4(_Inout_ BYTE* Input, IN SIZE_T InputLen, IN BYTE* Key, IN SIZE_T KeyLen);
 
 	VOID DecryptionAES(_Inout_ BYTE* Input, IN SIZE_T InputLen, IN BYTE* Key, IN SIZE_T KeyLen);
 
