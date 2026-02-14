@@ -271,37 +271,43 @@ namespace erebus {
 
 	CompressionFormat DetectCompressionFormat(_In_ const BYTE* Input, IN SIZE_T InputLen)
 	{
-		if (!Input || InputLen < 2)
-			return FORMAT_NONE;
+	    if (!Input || InputLen < 2)
+	        return FORMAT_NONE;
 
-		// Check for LZNT1 compression signature
-		if (InputLen >= 4 && (Input[0] & 0x80) != 0)
-		{
-			LOG_INFO("Detected LZNT1 compression");
-			return FORMAT_LZNT1;
-		}
+	    WORD Header = *(WORD*)Input;
+	
+	    // Check for LZNT1: bit 15 set AND signature bits [14:12] == 3
+	    if ((Header & 0x8000) && ((Header & 0x7000) >> 12) == 0x3)
+	    {
+	        WORD ChunkSize = (Header & 0x0FFF) + 1;
+	        if (ChunkSize > 0 && ChunkSize <= InputLen - 2)
+	        {
+	            LOG_INFO("Detected LZNT1 compression (chunk size: %d)", ChunkSize);
+	            return FORMAT_LZNT1;
+	        }
+	    }
 
-		// Check for RLE (Run-Length Encoding) - look for 0xFF markers
-		if (InputLen >= 3)
-		{
-			int RleMarkerCount = 0;
-			for (SIZE_T i = 0; i < min(InputLen - 2, 100); i++)
-			{
-				if (Input[i] == 0xFF && i + 2 < InputLen)
-				{
-					RleMarkerCount++;
-				}
-			}
-			if (RleMarkerCount > 0)
-			{
-				LOG_INFO("Detected RLE compression (%d markers found)", RleMarkerCount);
-				return FORMAT_RLE;
-			}
-		}
+	    // Check for RLE markers
+	    if (InputLen >= 3)
+	    {
+	        int RleMarkerCount = 0;
+	        for (SIZE_T i = 0; i < min(InputLen - 2, 100); i++)
+	        {
+	            if (Input[i] == 0xFF && i + 2 < InputLen)
+	            {
+	                RleMarkerCount++;
+	            }
+	        }
+	        if (RleMarkerCount > 0)
+	        {
+	            LOG_INFO("Detected RLE compression (%d markers found)", RleMarkerCount);
+	            return FORMAT_RLE;
+	        }
+	    }
 
-		LOG_INFO("No compression detected");
-		return FORMAT_NONE;
-	}
+	    LOG_INFO("No compression detected");
+	    return FORMAT_NONE;
+}
 
 	BOOL IsValidBase64Char(CHAR c)
 	{
