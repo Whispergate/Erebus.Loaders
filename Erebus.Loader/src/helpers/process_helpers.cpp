@@ -1,4 +1,4 @@
-#include "../include/loader.hpp"
+#include "../../include/loader.hpp"
 
 namespace erebus {
 	BOOL StageResource(IN int resource_id, IN LPCWSTR resource_class, OUT PBYTE* shellcode, OUT SIZE_T* shellcode_size)

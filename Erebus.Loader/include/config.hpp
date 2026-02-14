@@ -52,6 +52,14 @@
 #define CONFIG_ENCRYPTION_TYPE 0
 #endif
 
+#ifndef CONFIG_ENCRYPTION_KEY
+#define CONFIG_ENCRYPTION_KEY { 0x00 }
+#endif
+
+#ifndef CONFIG_ENCRYPTION_IV
+#define CONFIG_ENCRYPTION_IV { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
+#endif
+
 // ============================================
 // INJECTION CONFIGURATION
 // ============================================
@@ -108,5 +116,51 @@
 #elif CONFIG_INJECTION_TYPE == 5
 #define ExecuteShellcode erebus::InjectionPoolParty
 #endif
+
+// ============================================
+// GUARDRAILS CONFIGURATION
+// ============================================
+
+#include "guardrails/guardrails.hpp"
+
+// Enable/disable guardrails checks at compile time
+#ifndef CONFIG_GUARDRAILS_ENABLED
+#define CONFIG_GUARDRAILS_ENABLED 0
+#endif
+
+#ifndef CONFIG_GUARDRAILS_CHECK_DEBUGGER
+#define CONFIG_GUARDRAILS_CHECK_DEBUGGER 0
+#endif
+
+#ifndef CONFIG_GUARDRAILS_CHECK_REMOTE_DEBUGGER
+#define CONFIG_GUARDRAILS_CHECK_REMOTE_DEBUGGER 0
+#endif
+
+#ifndef CONFIG_GUARDRAILS_CHECK_DEBUGGER_PROCESSES
+#define CONFIG_GUARDRAILS_CHECK_DEBUGGER_PROCESSES 0
+#endif
+
+#ifndef CONFIG_GUARDRAILS_CHECK_HARDWARE_BREAKPOINTS
+#define CONFIG_GUARDRAILS_CHECK_HARDWARE_BREAKPOINTS 0
+#endif
+
+#ifndef CONFIG_GUARDRAILS_CHECK_TIMING
+#define CONFIG_GUARDRAILS_CHECK_TIMING 0
+#endif
+
+// Helper function to get configured guardrails
+inline erebus::guardrails::GuardrailConfig GetGuardrailConfig() {
+    erebus::guardrails::GuardrailConfig config = erebus::guardrails::GetDefaultConfig();
+    
+    #if CONFIG_GUARDRAILS_ENABLED
+        config.check_debugger_present = CONFIG_GUARDRAILS_CHECK_DEBUGGER;
+        config.check_remote_debugger = CONFIG_GUARDRAILS_CHECK_REMOTE_DEBUGGER;
+        config.check_debugger_processes = CONFIG_GUARDRAILS_CHECK_DEBUGGER_PROCESSES;
+        config.check_hardware_breakpoints = CONFIG_GUARDRAILS_CHECK_HARDWARE_BREAKPOINTS;
+        config.check_timing_checks = CONFIG_GUARDRAILS_CHECK_TIMING;
+    #endif
+    
+    return config;
+}
 
 #endif

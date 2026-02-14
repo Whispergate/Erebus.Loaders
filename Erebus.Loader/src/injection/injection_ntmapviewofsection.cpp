@@ -1,4 +1,4 @@
-#include "../include/loader.hpp"
+#include "../../include/loader.hpp"
 
 namespace erebus {
 #if CONFIG_INJECTION_TYPE == 2

@@ -87,5 +87,73 @@ namespace Erebus.ClickOnce
         /// Shellcode Byte Array
         /// </summary>
         public static byte[] Shellcode = new byte[] { };
+
+        // ============================================
+        // GUARDRAILS CONFIGURATION
+        // ============================================
+
+        /// <summary>
+        /// Enable/disable guardrails checks
+        /// </summary>
+        public static bool GuardrailsEnabled = false;
+
+        /// <summary>
+        /// Check if process is being debugged
+        /// </summary>
+        public static bool CheckDebugger = false;
+
+        /// <summary>
+        /// Check for debugger processes
+        /// </summary>
+        public static bool CheckDebuggerProcesses = false;
+
+        /// <summary>
+        /// Check for hardware breakpoints
+        /// </summary>
+        public static bool CheckHardwareBreakpoints = false;
+
+        /// <summary>
+        /// Check for timing anomalies
+        /// </summary>
+        public static bool CheckTiming = false;
+
+        /// <summary>
+        /// List of blocked debugger/analysis processes
+        /// </summary>
+        public static string[] BlockedProcesses = new string[] { 
+            "x64dbg", "x32dbg", "windbg", "ollydbg", "Debugger",
+            "ProcessEXPLORER", "procmon", "autoruns", "Wireshark",
+            "fiddler", "Charles", "BurpSuite", "ccSvcHst"
+        };
+
+        /// <summary>
+        /// Whitelisted hostnames (empty = allow all)
+        /// </summary>
+        public static string[] AllowedHostnames = new string[] { };
+
+        /// <summary>
+        /// Blacklisted hostnames (empty = block none)
+        /// </summary>
+        public static string[] BlockedHostnames = new string[] { };
+
+        /// <summary>
+        /// Blacklisted usernames (empty = block none)
+        /// </summary>
+        public static string[] BlockedUsernames = new string[] { };
+
+        /// <summary>
+        /// Whitelisted IP address prefixes (empty = allow all)
+        /// </summary>
+        public static string[] AllowedIPs = new string[] { };
+
+        /// <summary>
+        /// Blacklisted IP address prefixes (empty = block none)
+        /// </summary>
+        public static string[] BlockedIPs = new string[] { };
+
+        /// <summary>
+        /// Whitelisted domains (empty = allow all)
+        /// </summary>
+        public static string[] AllowedDomains = new string[] { };
     }
 }

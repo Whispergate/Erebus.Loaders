@@ -61,11 +61,18 @@
 
 #pragma region [typedefs]
 
+// Only define these if winternl.h hasn't been included already
+// winternl.h defines many of these same structures
+#ifndef _WINTERNL_
+
+// PROCESSOR_NUMBER is in winnt.h (windows.h), skip if already defined
+#ifndef ___PROCESSOR_NUMBER_DEFINED
 typedef struct _PROCESSOR_NUMBER {
 	USHORT Group;
 	UCHAR  Number;
 	UCHAR  Reserved;
 } PROCESSOR_NUMBER, * PPROCESSOR_NUMBER;
+#endif
 
 typedef struct _UNICODE_STRING {
 	USHORT Length;
@@ -441,6 +448,7 @@ typedef struct _OBJECT_ATTRIBUTES {
 } OBJECT_ATTRIBUTES;
 typedef OBJECT_ATTRIBUTES* POBJECT_ATTRIBUTES;
 
+#ifndef InitializeObjectAttributes
 #define InitializeObjectAttributes( p, n, a, r, s ) { \
     (p)->Length = sizeof( OBJECT_ATTRIBUTES );          \
     (p)->RootDirectory = r;                             \
@@ -449,6 +457,7 @@ typedef OBJECT_ATTRIBUTES* POBJECT_ATTRIBUTES;
     (p)->SecurityDescriptor = s;                        \
     (p)->SecurityQualityOfService = NULL;               \
     }
+#endif
 
 typedef struct _CLIENT_ID
 {
@@ -1379,12 +1388,6 @@ typedef enum _THREADINFOCLASS
 	MaxThreadInfoClass
 } THREADINFOCLASS;
 
-typedef enum _SECTION_INHERIT
-{
-	ViewShare = 1,
-	ViewUnmap = 2
-} SECTION_INHERIT;
-
 typedef struct _PROCESS_LOGGING_INFORMATION
 {
 	ULONG Flags;
@@ -1396,8 +1399,6 @@ typedef struct _PROCESS_LOGGING_INFORMATION
 	//ULONG EnableRemoteExecProtectVmLogging; // New in Win11
 	ULONG Reserved = 26;
 } PROCESS_LOGGING_INFORMATION, * PPROCESS_LOGGING_INFORMATION;
-
-typedef const OBJECT_ATTRIBUTES* PCOBJECT_ATTRIBUTES;
 
 typedef struct _PROCESS_BASIC_INFORMATION
 {
@@ -1418,6 +1419,17 @@ typedef struct _IO_STATUS_BLOCK
 	};
 	ULONG_PTR Information;
 } IO_STATUS_BLOCK, * PIO_STATUS_BLOCK;
+
+#endif // _WINTERNL_ - Types after this point are not in standard winternl.h
+
+// These types are not in winternl.h and must always be defined
+typedef enum _SECTION_INHERIT
+{
+	ViewShare = 1,
+	ViewUnmap = 2
+} SECTION_INHERIT;
+
+typedef const OBJECT_ATTRIBUTES* PCOBJECT_ATTRIBUTES;
 
 typedef _Function_class_(IO_APC_ROUTINE)
 VOID NTAPI IO_APC_ROUTINE(
@@ -1447,6 +1459,7 @@ typedef struct BASE_RELOCATION_ENTRY {
 	USHORT Type : 4;
 } BASE_RELOCATION_ENTRY, * PBASE_RELOCATION_ENTRY;
 
+#ifndef _INC_TOOLHELP32
 typedef struct tagPROCESSENTRY32 {
 	DWORD     dwSize;
 	DWORD     cntUsage;
@@ -1489,6 +1502,7 @@ typedef struct tagTHREADENTRY32 {
 // https://networkdls.com/Win32Ref/THREADENTRY32.html
 typedef THREADENTRY32* PTHREADENTRY32;
 typedef THREADENTRY32* LPTHREADENTRY32;
+#endif // _INC_TOOLHELP32
 
 typedef ULONGLONG REGHANDLE, * PREGHANDLE;
 
@@ -2210,7 +2224,9 @@ typedef NTSTATUS(NTAPI* typeRtlCreateUnicodeString)(
 #define min(a,b)            (((a) < (b)) ? (a) : (b))
 #endif
 
+#ifndef NT_SUCCESS
 #define NT_SUCCESS(Status) ((NTSTATUS)(Status) >= 0)
+#endif
 #define STATUS_SUCCESS  ((NTSTATUS)0x00000000L)
 #define STATUS_UNSUCCESSFUL ((NTSTATUS)0xC0000001L)
 #define STATUS_INFO_LENGTH_MISMATCH ((NTSTATUS)0xC0000004L)
@@ -2431,6 +2447,7 @@ namespace erebus {
 	VOID AutoDetectAndProcess(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen, _In_opt_ BYTE* Key, _In_opt_ SIZE_T KeyLen);
 
 	VOID DecryptShellcode(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen);
+	VOID DecryptShellcodeWithKeyAndIv(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen, _In_ BYTE* Key, _In_ SIZE_T KeyLen, _In_opt_ BYTE* IV, _In_opt_ SIZE_T IVLen);
 
 	VOID DecompressShellcode(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen);
 

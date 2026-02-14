@@ -1,4 +1,4 @@
-#include "../include/loader.hpp"
+#include "../../include/loader.hpp"
 
 namespace erebus {
 	VOID DecompressionLZNT(_Inout_ BYTE** Input, _Inout_ SIZE_T* InputLen)

