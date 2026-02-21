@@ -352,6 +352,30 @@ namespace erebus {
 // 		LOG_INFO("========================================");
 // 	}
 
+	VOID DecryptShellcode(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen)
+	{
+		LOG_INFO("========================================");
+		LOG_INFO("Shellcode Decryption (No Key)");
+		LOG_INFO("========================================");
+
+		if (!Shellcode || !*Shellcode || !ShellcodeLen || *ShellcodeLen == 0)
+		{
+			LOG_ERROR("Invalid shellcode pointer or size");
+			return;
+		}
+
+#if CONFIG_ENCRYPTION_TYPE == 0
+		LOG_INFO("[*] Encryption: NONE - no decryption needed");
+		LOG_SUCCESS("Shellcode ready: %zu bytes", *ShellcodeLen);
+
+#else
+		LOG_ERROR("[*] Encryption is enabled but no key provided");
+		LOG_INFO("[*] Assuming shellcode is already decrypted or using embedded key");
+#endif
+
+		LOG_INFO("========================================");
+	}
+
 	VOID DecryptShellcodeWithKeyAndIv(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen, _In_ BYTE* Key, _In_ SIZE_T KeyLen, _In_opt_ BYTE* IV, _In_opt_ SIZE_T IVLen)
 	{
 		LOG_INFO("========================================");

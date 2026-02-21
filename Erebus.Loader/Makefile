@@ -3,9 +3,19 @@ ifeq ($(OS),Windows_NT)
 	# Running on Windows (native or MSYS2/MinGW)
 	DETECTED_OS := Windows
 	ifneq ($(MSYSTEM),)
-		CC      := g++
-		WINDRES := windres
-		MINGW_INCLUDE := -I/mingw64/include
+		# Determine compiler based on architecture
+		ARCH ?= x64
+		ifeq ($(ARCH),x64)
+			CC      := g++
+			WINDRES := windres
+			MINGW_INCLUDE := -I/mingw64/include
+			ARCH_FLAGS := -m64
+		else ifeq ($(ARCH),x86)
+			CC      := g++
+			WINDRES := windres
+			MINGW_INCLUDE := -I/mingw32/include
+			ARCH_FLAGS := -m32
+		endif
 	else
 		CC      := g++
 		WINDRES := windres
@@ -14,30 +24,44 @@ ifeq ($(OS),Windows_NT)
 else
 	# Running on Linux (use cross-compiler)
 	DETECTED_OS := Linux
-	CC      := x86_64-w64-mingw32-g++
-	WINDRES := x86_64-w64-mingw32-windres
-	MINGW_INCLUDE := -I/usr/x86_64-w64-mingw32/include
+	ARCH ?= x64
+	ifeq ($(ARCH),x64)
+		CC      := x86_64-w64-mingw32-g++
+		WINDRES := x86_64-w64-mingw32-windres
+		MINGW_INCLUDE := -I/usr/x86_64-w64-mingw32/include
+		ARCH_FLAGS := -m64
+	else ifeq ($(ARCH),x86)
+		CC      := i686-w64-mingw32-g++
+		WINDRES := i686-w64-mingw32-windres
+		MINGW_INCLUDE := -I/usr/i686-w64-mingw32/include
+		ARCH_FLAGS := -m32
+	endif
 endif
 
 BUILD	?= release
 TARGET	?= exe
 INJECTION_TYPE ?= 3
+ARCH    ?= x64
 
 # Common Flags for Loader/Shellcode stability
 # -ffreestanding: No standard library startup
-# -mno-red-zone: Essential for x64 interrupt safety
+# -mno-red-zone: Essential for x64 interrupt safety (x86 doesn't need this)
 # -fno-stack-protector: Prevent stack cookies requiring CRT
 # -fno-exceptions -fno-rtti: Remove C++ runtime dependencies
-COMMON_FLAGS := -Wall -I"$(CURDIR)/include" $(MINGW_INCLUDE) \
+COMMON_FLAGS := -Wall -I"$(CURDIR)/include" $(MINGW_INCLUDE) $(ARCH_FLAGS) \
                 -masm=intel \
                 -fno-stack-protector \
-                -mno-red-zone \
                 -fno-exceptions \
                 -fno-rtti \
                 -Wno-unknown-pragmas \
                 -Wno-unused-function \
                 -Wno-narrowing \
                 -DCONFIG_INJECTION_TYPE=$(INJECTION_TYPE)
+
+# Add architecture-specific flags
+ifeq ($(ARCH),x64)
+	COMMON_FLAGS += -mno-red-zone
+endif
 
 # Libraries needed for guardrails (iphlpapi for IP address check, ws2_32 for network functions)
 LIBS := -liphlpapi -lws2_32
@@ -87,7 +111,7 @@ OBJS := $(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS)))
 TEST_SRCS := $(wildcard tests/*.cpp src/helpers/*.cpp)
 TEST_OBJS := $(patsubst %.cpp,%.o,$(TEST_SRCS))
 TEST_OUT := erebus_test.exe
-TEST_DLL_OUT := erebustest.dll
+TEST_DLL_OUT := erebus_test.dll
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -105,6 +129,25 @@ dll:
 
 exe:
 	$(MAKE) TARGET=exe
+
+# Architecture targets
+x64:
+	$(MAKE) ARCH=x64
+
+x86:
+	$(MAKE) ARCH=x86
+
+x64-dll:
+	$(MAKE) ARCH=x64 TARGET=dll
+
+x86-dll:
+	$(MAKE) ARCH=x86 TARGET=dll
+
+x64-exe:
+	$(MAKE) ARCH=x64 TARGET=exe
+
+x86-exe:
+	$(MAKE) ARCH=x86 TARGET=exe
 
 # Test target - builds and optionally runs the test suite
 TEST_CFLAGS := -g -O0 -D_DEBUG -Wall -I"$(CURDIR)/include" $(MINGW_INCLUDE) -masm=intel -ffunction-sections -fdata-sections -DCONFIG_INJECTION_TYPE=0
@@ -205,7 +248,72 @@ test-all-injections:
 	$(MAKE) BUILD=debug INJECTION_TYPE=5
 	@echo "All injection types built successfully!"
 
+# Build all test payloads (EXE and DLL for each test type) and copy to payloads directory
+PAYLOADS_DIR := $(CURDIR)/payloads
+test-all: test-all-payloads
+test-all-payloads:
+	@echo "=== Building all test payloads ==="
+	@mkdir -p $(PAYLOADS_DIR)
+	@echo ""
+	@echo "[1/12] Building general test EXE..."
+	$(MAKE) clean
+	$(MAKE) test
+	@mv $(TEST_OUT) $(PAYLOADS_DIR)/
+	@echo "[2/12] Building general test DLL..."
+	$(MAKE) clean
+	$(MAKE) test-dll
+	@mv $(TEST_DLL_OUT) $(PAYLOADS_DIR)/
+	@echo "[3/12] Building injection test EXE (INJECTION_TYPE=1)..."
+	$(MAKE) clean
+	$(MAKE) test-injection INJECTION_TYPE=1
+	@mv $(INJECTION_TEST_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type1.exe
+	@echo "[4/12] Building injection test DLL (INJECTION_TYPE=1)..."
+	$(MAKE) clean
+	$(MAKE) test-injection-dll INJECTION_TYPE=1
+	@mv $(INJECTION_TEST_DLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type1.dll
+	@echo "[5/12] Building injection test EXE (INJECTION_TYPE=2)..."
+	$(MAKE) clean
+	$(MAKE) test-injection INJECTION_TYPE=2
+	@mv $(INJECTION_TEST_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type2.exe
+	@echo "[6/12] Building injection test DLL (INJECTION_TYPE=2)..."
+	$(MAKE) clean
+	$(MAKE) test-injection-dll INJECTION_TYPE=2
+	@mv $(INJECTION_TEST_DLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type2.dll
+	@echo "[7/12] Building injection test EXE (INJECTION_TYPE=3)..."
+	$(MAKE) clean
+	$(MAKE) test-injection INJECTION_TYPE=3
+	@mv $(INJECTION_TEST_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type3.exe
+	@echo "[8/12] Building injection test DLL (INJECTION_TYPE=3)..."
+	$(MAKE) clean
+	$(MAKE) test-injection-dll INJECTION_TYPE=3
+	@mv $(INJECTION_TEST_DLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type3.dll
+	@echo "[9/12] Building injection test EXE (INJECTION_TYPE=4)..."
+	$(MAKE) clean
+	$(MAKE) test-injection INJECTION_TYPE=4
+	@mv $(INJECTION_TEST_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type4.exe
+	@echo "[10/12] Building injection test DLL (INJECTION_TYPE=4)..."
+	$(MAKE) clean
+	$(MAKE) test-injection-dll INJECTION_TYPE=4
+	@mv $(INJECTION_TEST_DLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type4.dll
+	@echo "[11/12] Building injection test EXE (INJECTION_TYPE=5)..."
+	$(MAKE) clean
+	$(MAKE) test-injection INJECTION_TYPE=5
+	@mv $(INJECTION_TEST_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type5.exe
+	@echo "[12/12] Building injection test DLL (INJECTION_TYPE=5)..."
+	$(MAKE) clean
+	$(MAKE) test-injection-dll INJECTION_TYPE=5
+	@mv $(INJECTION_TEST_DLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type5.dll
+	@echo ""
+	@echo "=== All test payloads built successfully! ==="
+	@echo "Location: $(PAYLOADS_DIR)"
+	@ls -lh $(PAYLOADS_DIR)/
+
 clean:
 	rm -f src/*.o src/helpers/*.o src/injection/*.o src/guardrails/*.o tests/*.o $(RES) $(CURDIR)/erebus.exe $(CURDIR)/erebus.dll $(TEST_OUT) $(TEST_DLL_OUT) $(INJECTION_TEST_OUT) $(INJECTION_TEST_DLL_OUT)
 
-.PHONY: all dll exe test test-dll run-tests test-injection test-injection-dll test-all-injections clean
+clean-payloads:
+	rm -rf $(PAYLOADS_DIR)
+
+clean-all: clean clean-payloads
+
+.PHONY: all dll exe x64 x86 x64-dll x86-dll x64-exe x86-exe test test-dll run-tests test-injection test-injection-dll test-all-injections test-all test-all-payloads clean clean-payloads clean-all

