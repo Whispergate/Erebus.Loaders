@@ -1,9 +1,6 @@
 #include "../include/loader.hpp"
 #include "../include/config.hpp"
 
-
-// NOTE: shellcode.hpp is NOT included here to prevent linker errors.
-
 namespace erebus {
 
 	Config config{};
