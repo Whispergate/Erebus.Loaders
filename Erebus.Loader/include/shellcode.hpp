@@ -1,2 +1,3 @@
 unsigned char key[] = { 0x00 };
+unsigned char nonce[] = { 0x00 };
 unsigned char shellcode[] = { 0x00 };

