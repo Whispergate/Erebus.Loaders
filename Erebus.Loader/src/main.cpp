@@ -151,25 +151,28 @@ VOID entry(void)
 	return;
 }
 
-#if _RELEASE
-int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
+#ifdef BUILD_DLL
+
+static BOOL entry_called = FALSE;
+
+static DWORD WINAPI EntryThread(LPVOID)
 {
 	entry();
 	return 0;
 }
-
-#elif _DEBUG && _WINDLL
-static BOOL entry_called = FALSE;
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH:
+		DisableThreadLibraryCalls(hModule);
 		if (!entry_called) {
-			entry();
 			entry_called = TRUE;
+			HANDLE hThread = CreateThread(NULL, 0, EntryThread, NULL, 0, NULL);
+			if (hThread) CloseHandle(hThread);
 		}
+		break;
 	case DLL_THREAD_ATTACH:
 	case DLL_THREAD_DETACH:
 	case DLL_PROCESS_DETACH:
@@ -181,8 +184,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 extern "C" __declspec(dllexport) HRESULT DllRegisterServer(void)
 {
 	if (!entry_called) {
-		entry();
 		entry_called = TRUE;
+		HANDLE hThread = CreateThread(NULL, 0, EntryThread, NULL, 0, NULL);
+		if (hThread) CloseHandle(hThread);
 	}
 	return S_OK;
 }
@@ -192,6 +196,14 @@ extern "C" __declspec(dllexport) HRESULT DllUnregisterServer(void)
 	return S_OK;
 }
 
+#elif defined(NDEBUG)
+
+int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
+{
+	entry();
+	return 0;
+}
+
 #else
 
 int main()
@@ -199,6 +211,5 @@ int main()
 	entry();
 	return 0;
 }
-
 
 #endif

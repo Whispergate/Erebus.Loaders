@@ -88,7 +88,7 @@ endif
 # Check if proxy.def exists in defs folder
 DEF_FILE := $(wildcard $(CURDIR)/defs/proxy.def)
 ifneq ($(DEF_FILE),)
-	DEF_LINK := $(DEF_FILE)
+	DEF_LINK := -Wl,$(DEF_FILE)
 else
 	DEF_LINK :=
 endif
@@ -101,6 +101,9 @@ ifeq ($(TARGET),dll)
 	endif
 	OUT  := erebus.dll
 else
+	ifeq ($(BUILD),release)
+		LDFLAGS += -mwindows
+	endif
 	OUT  := erebus.exe
 endif
 

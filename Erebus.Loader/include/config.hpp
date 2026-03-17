@@ -64,9 +64,7 @@
 // INJECTION CONFIGURATION
 // ============================================
 
-// Target process for remote injection
-#ifndef CONFIG_TARGET_PROCESS
-#endif
+// Target process for remote injection (defined per injection type below)
 
 // Injection technique:
 // 1 = NtQueueApcThread    - APC injection to suspended thread (Remote)

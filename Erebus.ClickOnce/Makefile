@@ -1,6 +1,11 @@
 PROJECT := Erebus.ClickOnce.csproj
 TFM := net7.0-windows
-RID ?= win-x64
+ARCH ?= x64
+ifeq ($(ARCH),x86)
+    RID ?= win-x86
+else
+    RID ?= win-x64
+endif
 CONFIG ?= Release
 PUBLISH_DIR := bin/$(CONFIG)/$(TFM)/$(RID)/publish
 
