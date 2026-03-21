@@ -154,11 +154,6 @@ namespace erebus {
 	{
 		HANDLE process = INVALID_HANDLE_VALUE;
 
-		if (!OpenProcess)
-		{
-			LOG_ERROR("GetProcAddress failed to get OpenProcess.");
-			return NULL;
-		}
 		// Include PROCESS_QUERY_INFORMATION and PROCESS_DUP_HANDLE for PoolParty injection
 		process = OpenProcess(
 			PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION | PROCESS_VM_READ | 
