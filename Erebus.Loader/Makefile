@@ -100,6 +100,14 @@ ifeq ($(TARGET),dll)
 		LDFLAGS += $(DEF_LINK)
 	endif
 	OUT  := erebus.dll
+else ifeq ($(TARGET),cpl)
+	CFLAGS  += -DBUILD_CPL
+	LDFLAGS += -shared -Wl,--subsystem,windows
+	OUT  := erebus.cpl
+else ifeq ($(TARGET),xll)
+	CFLAGS  += -DBUILD_XLL
+	LDFLAGS += -shared -Wl,--subsystem,windows
+	OUT  := erebus.xll
 else
 	ifeq ($(BUILD),release)
 		LDFLAGS += -mwindows
@@ -151,6 +159,24 @@ x64-exe:
 
 x86-exe:
 	$(MAKE) ARCH=x86 TARGET=exe
+
+cpl:
+	$(MAKE) TARGET=cpl
+
+x64-cpl:
+	$(MAKE) ARCH=x64 TARGET=cpl
+
+x86-cpl:
+	$(MAKE) ARCH=x86 TARGET=cpl
+
+xll:
+	$(MAKE) TARGET=xll
+
+x64-xll:
+	$(MAKE) ARCH=x64 TARGET=xll
+
+x86-xll:
+	$(MAKE) ARCH=x86 TARGET=xll
 
 # Test target - builds and optionally runs the test suite
 TEST_CFLAGS := -g -O0 -D_DEBUG -Wall -I"$(CURDIR)/include" $(MINGW_INCLUDE) -masm=intel -ffunction-sections -fdata-sections -DCONFIG_INJECTION_TYPE=0
@@ -312,11 +338,11 @@ test-all-payloads:
 	@ls -lh $(PAYLOADS_DIR)/
 
 clean:
-	rm -f src/*.o src/helpers/*.o src/injection/*.o src/guardrails/*.o tests/*.o $(RES) $(CURDIR)/erebus.exe $(CURDIR)/erebus.dll $(TEST_OUT) $(TEST_DLL_OUT) $(INJECTION_TEST_OUT) $(INJECTION_TEST_DLL_OUT)
+	rm -f src/*.o src/helpers/*.o src/injection/*.o src/guardrails/*.o tests/*.o $(RES) $(CURDIR)/erebus.exe $(CURDIR)/erebus.dll $(CURDIR)/erebus.cpl $(CURDIR)/erebus.xll $(TEST_OUT) $(TEST_DLL_OUT) $(INJECTION_TEST_OUT) $(INJECTION_TEST_DLL_OUT)
 
 clean-payloads:
 	rm -rf $(PAYLOADS_DIR)
 
 clean-all: clean clean-payloads
 
-.PHONY: all dll exe x64 x86 x64-dll x86-dll x64-exe x86-exe test test-dll run-tests test-injection test-injection-dll test-all-injections test-all test-all-payloads clean clean-payloads clean-all
+.PHONY: all dll exe cpl xll x64 x86 x64-dll x86-dll x64-exe x86-exe x64-cpl x86-cpl x64-xll x86-xll test test-dll run-tests test-injection test-injection-dll test-all-injections test-all test-all-payloads clean clean-payloads clean-all
