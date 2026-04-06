@@ -2245,10 +2245,10 @@ typedef NTSTATUS(NTAPI* typeRtlCreateUnicodeString)(
 #define MAX_BUFFER_SIZE 1024
 
 #define ImportModule(dll) \
-    erebus::GetModuleHandleC((ULONG)erebus::HashStringFowlerNollVoVariant1a(dll))
+    GetModuleHandleA(dll)
 
 #define ImportFunction(dll_module, function, type) \
-    type function = (type) erebus::GetProcAddressC(dll_module, (ULONG)erebus::HashStringFowlerNollVoVariant1a(#function))
+    type function = (type) GetProcAddress(dll_module, #function)
 
 #define COLOUR_DEFAULT "\033[0m"
 #define COLOUR_BOLD "\033[1m"
@@ -2362,6 +2362,11 @@ namespace erebus {
 
 	void srand(unsigned long s_seed);
 
+	constexpr UCHAR HashToLower(UCHAR c)
+	{
+		return (c >= 'A' && c <= 'Z') ? (c + 32) : c;
+	}
+
 	constexpr ULONG HashStringFowlerNollVoVariant1a(_In_ LPCSTR String)
 	{
 		ULONG Hash = erebus::RandomHashSeed();
@@ -2369,7 +2374,7 @@ namespace erebus {
 
 		while (*String)
 		{
-			Hash ^= (UCHAR)*String++;
+			Hash ^= erebus::HashToLower((UCHAR)*String++);
 			Hash *= Prime;
 		}
 
@@ -2382,7 +2387,7 @@ namespace erebus {
 
 		while (*String)
 		{
-			Hash ^= (UCHAR)*String++;
+			Hash ^= erebus::HashToLower((UCHAR)*String++);
 			Hash *= Prime;
 		}
 

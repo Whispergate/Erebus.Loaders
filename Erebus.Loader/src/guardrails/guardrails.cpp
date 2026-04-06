@@ -384,15 +384,14 @@ CheckResult CheckRemoteDebugger() {
         PULONG ReturnLength
     );
     
-    HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+    HMODULE hNtdll = ImportModule("ntdll.dll");
     if (!hNtdll) {
         result.passed = true;
         result.reason = "Unable to check remote debugger";
         return result;
     }
-    
-    pNtQueryInformationProcess NtQueryInformationProcess = 
-        (pNtQueryInformationProcess)GetProcAddress(hNtdll, "NtQueryInformationProcess");
+
+    ImportFunction(hNtdll, NtQueryInformationProcess, pNtQueryInformationProcess);
     
     if (NtQueryInformationProcess) {
         DWORD_PTR debugPort = 0;

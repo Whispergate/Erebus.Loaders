@@ -3,9 +3,9 @@
 namespace erebus {
 	VOID DecompressionLZNT(_Inout_ BYTE** Input, _Inout_ SIZE_T* InputLen)
 	{
-		HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+		HMODULE ntdll = ImportModule("ntdll.dll");
 		if (!ntdll) { LOG_ERROR("Failed to get ntdll.dll"); return; }
-		typeRtlDecompressBuffer RtlDecompressBuffer = (typeRtlDecompressBuffer)GetProcAddress(ntdll, "RtlDecompressBuffer");
+		ImportFunction(ntdll, RtlDecompressBuffer, typeRtlDecompressBuffer);
 
 		if (!Input || !*Input || !InputLen || *InputLen == 0)
 		{

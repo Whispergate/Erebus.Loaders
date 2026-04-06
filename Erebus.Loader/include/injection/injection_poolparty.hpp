@@ -21,7 +21,7 @@
 #include "../config.hpp"
 
 namespace erebus {
-#if CONFIG_INJECTION_TYPE == 5
+#if CONFIG_INJECTION_TYPE == 4
 
 	/**
 	 * @brief Check if a process has an active thread pool (IoCompletion handle)
