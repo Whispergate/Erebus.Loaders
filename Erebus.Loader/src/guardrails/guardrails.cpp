@@ -61,7 +61,8 @@ GuardrailConfig GetDefaultConfig() {
     config.check_debugger_processes = false;
     config.check_hardware_breakpoints = false;
     config.check_timing_checks = false;
-    
+    config.check_sandbox_environment = false;
+
     return config;
 }
 
@@ -121,7 +122,12 @@ CheckResult RunGuardrails(const GuardrailConfig& config) {
         result = CheckTimingAnomaly();
         if (!result.passed) return result;
     }
-    
+
+    if (config.check_sandbox_environment) {
+        result = CheckSandboxEnvironment();
+        if (!result.passed) return result;
+    }
+
     // All checks passed
     result.passed = true;
     result.reason = "All guardrail checks passed";
@@ -571,8 +577,108 @@ bool CheckIfDebugged() {
     if (!CheckHardwareBreakpoints().passed) return true;
     if (!CheckDebuggerProcesses().passed) return true;
     if (!CheckTimingAnomaly().passed) return true;
-    
+
     return false;
+}
+
+// ================================================================
+// Sandbox / VM environment detection
+// ================================================================
+
+CheckResult CheckSandboxEnvironment() {
+    CheckResult result;
+    result.passed = true;
+    result.reason = nullptr;
+
+    // --- Check 1: Low resource counts (< 2 CPU cores, < 2 GB RAM) ---
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    if (si.dwNumberOfProcessors < 2) {
+        result.passed = false;
+        result.reason = "Low processor count";
+        return result;
+    }
+
+    MEMORYSTATUSEX mem = {};
+    mem.dwLength = sizeof(mem);
+    if (GlobalMemoryStatusEx(&mem)) {
+        // Less than 2 GB of physical RAM
+        if (mem.ullTotalPhys < (2ULL * 1024 * 1024 * 1024)) {
+            result.passed = false;
+            result.reason = "Low physical memory";
+            return result;
+        }
+    }
+
+    // --- Check 2: Small disk (< 60 GB) ---
+    ULARGE_INTEGER totalBytes = {};
+    if (GetDiskFreeSpaceExA("C:\\", nullptr, &totalBytes, nullptr)) {
+        if (totalBytes.QuadPart < (60ULL * 1024 * 1024 * 1024)) {
+            result.passed = false;
+            result.reason = "Small disk size";
+            return result;
+        }
+    }
+
+    // --- Check 3: Hypervisor presence via CPUID ---
+    // CPUID leaf 1, ECX bit 31 = hypervisor present
+#ifdef _MSC_VER
+    int cpuInfo[4] = {};
+    __cpuid(cpuInfo, 1);
+    if (cpuInfo[2] & (1 << 31)) {
+        result.passed = false;
+        result.reason = "Hypervisor detected";
+        return result;
+    }
+#else
+    unsigned int eax, ebx, ecx, edx;
+    __asm__ __volatile__(
+        "cpuid"
+        : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)
+        : "a"(1)
+    );
+    if (ecx & (1 << 31)) {
+        result.passed = false;
+        result.reason = "Hypervisor detected";
+        return result;
+    }
+#endif
+
+    // --- Check 4: Known sandbox filenames ---
+    const char* sandboxFiles[] = {
+        "C:\\agent\\agent.pyw",          // Cuckoo agent
+        "C:\\sandbox\\starter.exe",      // Generic sandbox
+        "C:\\analysis\\start.bat",       // Analysis VM
+    };
+    for (int i = 0; i < sizeof(sandboxFiles) / sizeof(sandboxFiles[0]); i++) {
+        DWORD attrs = GetFileAttributesA(sandboxFiles[i]);
+        if (attrs != INVALID_FILE_ATTRIBUTES) {
+            result.passed = false;
+            result.reason = "Sandbox artifact detected";
+            return result;
+        }
+    }
+
+    // --- Check 5: Recent user activity (no recent files = sandbox) ---
+    // Check if Recent folder has > 5 items (sandboxes are freshly provisioned)
+    WIN32_FIND_DATAA fd;
+    char recentPath[MAX_PATH];
+    if (SUCCEEDED(GetEnvironmentVariableA("APPDATA", recentPath, MAX_PATH))) {
+        strcat_s(recentPath, MAX_PATH, "\\Microsoft\\Windows\\Recent\\*");
+        HANDLE hFind = FindFirstFileA(recentPath, &fd);
+        if (hFind != INVALID_HANDLE_VALUE) {
+            int fileCount = 0;
+            do { fileCount++; } while (FindNextFileA(hFind, &fd) && fileCount < 10);
+            FindClose(hFind);
+            if (fileCount < 5) {
+                result.passed = false;
+                result.reason = "No recent user activity";
+                return result;
+            }
+        }
+    }
+
+    return result;
 }
 
 } // namespace guardrails

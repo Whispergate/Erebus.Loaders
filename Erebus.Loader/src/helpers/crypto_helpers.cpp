@@ -208,7 +208,7 @@ namespace erebus {
 			Input[k] ^= S[(S[i] + S[j]) % 256];
 		}
 
-		// [OPSEC] Scrub S-box — prevents RC4 key schedule recovery from memory dump
+		// [OPSEC] Scrub S-box - prevents RC4 key schedule recovery from memory dump
 		SecureZeroMemory(S, sizeof(S));
 		return;
 	}

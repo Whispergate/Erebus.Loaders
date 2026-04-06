@@ -73,7 +73,7 @@ namespace erebus {
 		HANDLE module_handle = INVALID_HANDLE_VALUE;
 		ULONG flags = 0;
 
-		// [OPSEC] Resolve ntdll via PEB walk — avoids plaintext "ntdll.dll" string
+		// [OPSEC] Resolve ntdll via PEB walk - avoids plaintext "ntdll.dll" string
 		HMODULE ntdll = GetModuleHandleC(HashStringFowlerNollVoVariant1a(L"ntdll.dll"));
 		if (!ntdll) return NULL;
 

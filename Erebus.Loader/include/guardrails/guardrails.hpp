@@ -50,6 +50,9 @@ struct GuardrailConfig {
     bool check_debugger_processes;       // Check for known debugger processes
     bool check_hardware_breakpoints;     // Check hardware breakpoints in debug registers
     bool check_timing_checks;            // Perform timing-based detection
+
+    // Anti-sandbox/VM checks
+    bool check_sandbox_environment;      // Check for VM/sandbox indicators
 };
 
 /**
@@ -81,6 +84,7 @@ CheckResult CheckRemoteDebugger();
 CheckResult CheckDebuggerProcesses();
 CheckResult CheckHardwareBreakpoints();
 CheckResult CheckTimingAnomaly();
+CheckResult CheckSandboxEnvironment();
 
 // Helper functions
 bool CheckIfDebugged();                  // Master anti-debug check (runs all enabled checks)

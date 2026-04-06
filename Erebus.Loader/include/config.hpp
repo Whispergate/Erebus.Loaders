@@ -147,6 +147,15 @@
 #define CONFIG_GUARDRAILS_CHECK_TIMING 0
 #endif
 
+#ifndef CONFIG_GUARDRAILS_CHECK_SANDBOX
+#define CONFIG_GUARDRAILS_CHECK_SANDBOX 0
+#endif
+
+// Decoy file to open when guardrails fail (empty = silent exit)
+#ifndef CONFIG_GUARDRAILS_DECOY_FILE
+#define CONFIG_GUARDRAILS_DECOY_FILE ""
+#endif
+
 // Helper function to get configured guardrails
 inline erebus::guardrails::GuardrailConfig GetGuardrailConfig() {
     erebus::guardrails::GuardrailConfig config = erebus::guardrails::GetDefaultConfig();
@@ -157,6 +166,7 @@ inline erebus::guardrails::GuardrailConfig GetGuardrailConfig() {
         config.check_debugger_processes = CONFIG_GUARDRAILS_CHECK_DEBUGGER_PROCESSES;
         config.check_hardware_breakpoints = CONFIG_GUARDRAILS_CHECK_HARDWARE_BREAKPOINTS;
         config.check_timing_checks = CONFIG_GUARDRAILS_CHECK_TIMING;
+        config.check_sandbox_environment = CONFIG_GUARDRAILS_CHECK_SANDBOX;
     #endif
     
     return config;
