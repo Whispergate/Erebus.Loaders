@@ -1,0 +1,23 @@
+appId: com.erebus.installer
+productName: ErebusInstaller
+copyright: ""
+directories:
+  output: dist
+  buildResources: build
+files:
+  - "src/**/*"
+  - "package.json"
+extraResources:
+  - from: "build/resources/payload"
+    to: "payload"
+    filter: ["**/*"]
+win:
+  target:
+    - portable
+  icon: build/icon.ico
+  artifactName: ${productName}.${ext}
+portable:
+  artifactName: ${productName}.${ext}
+  requestExecutionLevel: user
+  unpackDirName: false
+  splashImage: null

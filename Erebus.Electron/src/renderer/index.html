@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <title>Setup</title>
+  <link rel="stylesheet" href="wizard.css" />
+</head>
+<body>
+  <header id="header">
+    <h1 id="title">Setup</h1>
+    <p id="subtitle">Welcome</p>
+  </header>
+
+  <main>
+    <section id="panel-welcome" class="panel active">
+      <h2>Welcome to the <span class="product-name">Setup</span> Wizard</h2>
+      <p>This wizard will guide you through the installation of <span class="product-name">the application</span>.</p>
+      <p>It is recommended that you close all other applications before starting Setup.</p>
+      <p>Click Next to continue.</p>
+    </section>
+
+    <section id="panel-installing" class="panel">
+      <h2>Installing</h2>
+      <p id="install-status">Please wait while Setup installs <span class="product-name">the application</span>...</p>
+      <div class="progress"><div class="progress-bar" id="progress-bar"></div></div>
+      <p id="install-detail" class="muted"></p>
+    </section>
+
+    <section id="panel-finish" class="panel">
+      <h2>Completing the <span class="product-name">Setup</span> Wizard</h2>
+      <p><span class="product-name">The application</span> has been installed on your computer.</p>
+      <p>Click Finish to close Setup.</p>
+    </section>
+  </main>
+
+  <footer>
+    <button id="btn-back" disabled>&lt; Back</button>
+    <button id="btn-next">Next &gt;</button>
+    <button id="btn-cancel">Cancel</button>
+  </footer>
+
+  <script src="wizard.js"></script>
+</body>
+</html>
