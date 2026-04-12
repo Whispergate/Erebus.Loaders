@@ -184,7 +184,7 @@ x64-xll:
 x86-xll:
 	$(MAKE) ARCH=x86 TARGET=xll
 
-# Debug LDFLAGS for test targets — console subsystem, no stripping, debug symbols
+# Debug LDFLAGS for test targets - console subsystem, no stripping, debug symbols
 TEST_LDFLAGS := -g -static -static-libgcc -static-libstdc++ -Wl,--gc-sections -mconsole
 
 # Test target - builds and optionally runs the test suite
@@ -218,7 +218,7 @@ test-dll:
 	$(CC) $(TEST_DLL_LDFLAGS) tests/test_erebus.o src/helpers/*.o src/guardrails/*.o src/evasion/*.o -o $(TEST_DLL_OUT) $(LIBS)
 	@echo "Test DLL built: $(TEST_DLL_OUT)"
 
-# Test guardrails — exercises every guardrail check individually
+# Test guardrails - exercises every guardrail check individually
 test-guardrails:
 	$(CC) $(TEST_CFLAGS) -c tests/test_guardrails.cpp -o tests/test_guardrails.o
 	$(CC) $(TEST_CFLAGS) -c src/helpers/compression_helpers.cpp -o src/helpers/compression_helpers.o
