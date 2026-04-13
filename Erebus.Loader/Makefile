@@ -203,6 +203,8 @@ test:
 	$(CC) $(TEST_CFLAGS) -c src/helpers/api_hashing.cpp -o src/helpers/api_hashing.o
 	$(CC) $(TEST_CFLAGS) -c src/guardrails/guardrails.cpp -o src/guardrails/guardrails.o
 	$(CC) $(TEST_CFLAGS) -c src/evasion/evasion.cpp -o src/evasion/evasion.o
+	$(CC) $(TEST_CFLAGS) -c src/evasion/ntdll_unhook.cpp -o src/evasion/ntdll_unhook.o
+	$(CC) $(TEST_CFLAGS) -c src/evasion/syscalls.cpp -o src/evasion/syscalls.o
 	$(CC) $(TEST_LDFLAGS) tests/test_erebus.o src/helpers/*.o src/guardrails/*.o src/evasion/*.o -o $(TEST_OUT) $(LIBS)
 	@echo "Test binary built: $(TEST_OUT)"
 
@@ -215,6 +217,8 @@ test-dll:
 	$(CC) $(TEST_DLL_CFLAGS) -c src/helpers/api_hashing.cpp -o src/helpers/api_hashing.o
 	$(CC) $(TEST_DLL_CFLAGS) -c src/guardrails/guardrails.cpp -o src/guardrails/guardrails.o
 	$(CC) $(TEST_DLL_CFLAGS) -c src/evasion/evasion.cpp -o src/evasion/evasion.o
+	$(CC) $(TEST_DLL_CFLAGS) -c src/evasion/ntdll_unhook.cpp -o src/evasion/ntdll_unhook.o
+	$(CC) $(TEST_DLL_CFLAGS) -c src/evasion/syscalls.cpp -o src/evasion/syscalls.o
 	$(CC) $(TEST_DLL_LDFLAGS) tests/test_erebus.o src/helpers/*.o src/guardrails/*.o src/evasion/*.o -o $(TEST_DLL_OUT) $(LIBS)
 	@echo "Test DLL built: $(TEST_DLL_OUT)"
 
@@ -228,6 +232,8 @@ test-guardrails:
 	$(CC) $(TEST_CFLAGS) -c src/helpers/api_hashing.cpp -o src/helpers/api_hashing.o
 	$(CC) $(TEST_CFLAGS) -c src/guardrails/guardrails.cpp -o src/guardrails/guardrails.o
 	$(CC) $(TEST_CFLAGS) -c src/evasion/evasion.cpp -o src/evasion/evasion.o
+	$(CC) $(TEST_CFLAGS) -c src/evasion/ntdll_unhook.cpp -o src/evasion/ntdll_unhook.o
+	$(CC) $(TEST_CFLAGS) -c src/evasion/syscalls.cpp -o src/evasion/syscalls.o
 	$(CC) $(TEST_LDFLAGS) tests/test_guardrails.o src/helpers/*.o src/guardrails/*.o src/evasion/*.o -o $(GUARDRAILS_TEST_OUT) $(LIBS)
 	@echo "Guardrails test binary built: $(GUARDRAILS_TEST_OUT)"
 
@@ -254,6 +260,8 @@ test-injection:
 	$(CC) $(INJECTION_TEST_CFLAGS) -c src/helpers/api_hashing.cpp -o src/helpers/api_hashing.o
 	$(CC) $(INJECTION_TEST_CFLAGS) -c src/guardrails/guardrails.cpp -o src/guardrails/guardrails.o
 	$(CC) $(INJECTION_TEST_CFLAGS) -c src/evasion/evasion.cpp -o src/evasion/evasion.o
+	$(CC) $(INJECTION_TEST_CFLAGS) -c src/evasion/ntdll_unhook.cpp -o src/evasion/ntdll_unhook.o
+	$(CC) $(INJECTION_TEST_CFLAGS) -c src/evasion/syscalls.cpp -o src/evasion/syscalls.o
 	$(CC) $(INJECTION_TEST_CFLAGS) -c src/injection/injection_ntqueueapcthread.cpp -o src/injection/injection_ntqueueapcthread.o
 	$(CC) $(INJECTION_TEST_CFLAGS) -c src/injection/injection_ntmapviewofsection.cpp -o src/injection/injection_ntmapviewofsection.o
 	$(CC) $(INJECTION_TEST_CFLAGS) -c src/injection/injection_createfiber.cpp -o src/injection/injection_createfiber.o
@@ -273,6 +281,8 @@ test-injection-dll:
 	$(CC) $(INJECTION_TEST_DLL_CFLAGS) -c src/helpers/api_hashing.cpp -o src/helpers/api_hashing.o
 	$(CC) $(INJECTION_TEST_DLL_CFLAGS) -c src/guardrails/guardrails.cpp -o src/guardrails/guardrails.o
 	$(CC) $(INJECTION_TEST_DLL_CFLAGS) -c src/evasion/evasion.cpp -o src/evasion/evasion.o
+	$(CC) $(INJECTION_TEST_DLL_CFLAGS) -c src/evasion/ntdll_unhook.cpp -o src/evasion/ntdll_unhook.o
+	$(CC) $(INJECTION_TEST_DLL_CFLAGS) -c src/evasion/syscalls.cpp -o src/evasion/syscalls.o
 	$(CC) $(INJECTION_TEST_DLL_CFLAGS) -c src/injection/injection_ntqueueapcthread.cpp -o src/injection/injection_ntqueueapcthread.o
 	$(CC) $(INJECTION_TEST_DLL_CFLAGS) -c src/injection/injection_ntmapviewofsection.cpp -o src/injection/injection_ntmapviewofsection.o
 	$(CC) $(INJECTION_TEST_DLL_CFLAGS) -c src/injection/injection_createfiber.cpp -o src/injection/injection_createfiber.o
@@ -292,6 +302,8 @@ test-injection-cpl:
 	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/helpers/api_hashing.cpp -o src/helpers/api_hashing.o
 	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/guardrails/guardrails.cpp -o src/guardrails/guardrails.o
 	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/evasion/evasion.cpp -o src/evasion/evasion.o
+	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/evasion/ntdll_unhook.cpp -o src/evasion/ntdll_unhook.o
+	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/evasion/syscalls.cpp -o src/evasion/syscalls.o
 	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/injection/injection_ntqueueapcthread.cpp -o src/injection/injection_ntqueueapcthread.o
 	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/injection/injection_ntmapviewofsection.cpp -o src/injection/injection_ntmapviewofsection.o
 	$(CC) $(INJECTION_TEST_CPL_CFLAGS) -c src/injection/injection_createfiber.cpp -o src/injection/injection_createfiber.o
@@ -311,6 +323,8 @@ test-injection-xll:
 	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/helpers/api_hashing.cpp -o src/helpers/api_hashing.o
 	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/guardrails/guardrails.cpp -o src/guardrails/guardrails.o
 	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/evasion/evasion.cpp -o src/evasion/evasion.o
+	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/evasion/ntdll_unhook.cpp -o src/evasion/ntdll_unhook.o
+	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/evasion/syscalls.cpp -o src/evasion/syscalls.o
 	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/injection/injection_ntqueueapcthread.cpp -o src/injection/injection_ntqueueapcthread.o
 	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/injection/injection_ntmapviewofsection.cpp -o src/injection/injection_ntmapviewofsection.o
 	$(CC) $(INJECTION_TEST_XLL_CFLAGS) -c src/injection/injection_createfiber.cpp -o src/injection/injection_createfiber.o

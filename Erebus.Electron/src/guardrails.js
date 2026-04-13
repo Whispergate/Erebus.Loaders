@@ -22,19 +22,25 @@ function _list(v) {
 }
 
 function checkDebugger() {
-  // process.execArgv contains --inspect/--inspect-brk when Node is launched
-  // under a debugger; process.debugPort is non-zero when the inspector is
-  // attached. Either one is a strong signal that a researcher is looking.
+  // We check for an actually-attached inspector, not just the configured
+  // debug port. `process.debugPort` is populated with the default port
+  // (9229) for every Node / Electron process regardless of whether anything
+  // is listening, so comparing it against zero was silently firing on every
+  // legitimate install.
+  //
+  // Sources we do trust:
+  //   - `--inspect` / `--inspect-brk` / `--debug` in process.execArgv
+  //     (the process was launched with a debugger arg)
+  //   - `require('inspector').url()` returning a non-empty URL
+  //     (the inspector agent is actually active for this process)
   const args = (process.execArgv || []).join(' ').toLowerCase();
   if (args.includes('--inspect') || args.includes('--debug')) {
     return 'node-inspector-arg';
   }
-  if (process.debugPort && process.debugPort > 0) {
-    return 'debug-port-open';
-  }
   try {
     const inspector = require('inspector');
-    if (inspector.url && inspector.url()) return 'inspector-attached';
+    const url = inspector.url && inspector.url();
+    if (url) return `inspector-attached:${url}`;
   } catch (_) { /* inspector module unavailable - fine */ }
   return null;
 }
@@ -103,7 +109,12 @@ function checkMinScreenSize(minWidth, minHeight) {
   if (!minWidth && !minHeight) return null;
   try {
     const primary = screen.getPrimaryDisplay();
-    const { width, height } = primary.workAreaSize;
+    // Use `size` (physical screen dimensions) rather than `workAreaSize`
+    // (physical minus the Windows taskbar / menu bar). A VM configured for
+    // 1280x720 has a 1280x720 `size` but a ~1280x680 `workAreaSize` because
+    // the taskbar eats ~40 px, which would otherwise silently fail this
+    // check on every legitimate 720p-configured target.
+    const { width, height } = primary.size;
     if (minWidth && width < minWidth) {
       return `screen-too-small:${width}x${height}`;
     }
@@ -125,8 +136,13 @@ function checkMinCpuCount(minCpus) {
 
 function checkMinMemory(minBytes) {
   if (!minBytes) return null;
+  // os.totalmem() returns bytes actually addressable by userspace, which is
+  // always 30–80 MB less than the configured RAM on Windows VMs (kernel,
+  // MMIO, hypervisor reserve). Apply a 5 % tolerance so a 2048 MB VM that
+  // actually reports ~2040 MB passes a `Min Memory = 2048 MB` check.
   const total = os.totalmem();
-  if (total < minBytes) return `too-little-ram:${total}`;
+  const tolerant = Math.floor(minBytes * 0.95);
+  if (total < tolerant) return `too-little-ram:${total}`;
   return null;
 }
 

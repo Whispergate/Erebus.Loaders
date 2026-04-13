@@ -19,6 +19,7 @@ let requireMouseMovement = false;
 let mouseMovementSeen = false;
 let dwellStart = Date.now();
 let interactionToken = null;
+let debugMode = false;
 
 function show(i) {
   step = i;
@@ -53,6 +54,7 @@ function scheduleGateReevaluation() {
   const wait = Math.max(50, (dwellStart + dwellMs) - Date.now());
   gateTimer = setTimeout(async () => {
     gateTimer = null;
+    updateDebugBanner();
     if (!canEnableInstallButton()) {
       // Still waiting on mouse movement - re-evaluate on next movement.
       return;
@@ -65,6 +67,7 @@ function scheduleGateReevaluation() {
     } catch (_) { /* ignore; button stays disabled */ }
     if (interactionToken) {
       els.next.disabled = false;
+      updateDebugBanner();
     }
   }, wait);
 }
@@ -93,8 +96,38 @@ async function init() {
   document.title = `${info.product} Setup`;
   dwellMs = info.dwellMs || 0;
   requireMouseMovement = !!info.requireMouseMovement;
+  debugMode = !!info.debugMode;
   dwellStart = Date.now();
   show(0);
+
+  if (debugMode) {
+    // Inject a visible debug banner so the operator can see WHY the install
+    // button is disabled while testing. Never rendered in shipped builds
+    // (debugMode is a BuildParameter that defaults to False).
+    const banner = document.createElement('div');
+    banner.id = 'debug-banner';
+    banner.style.cssText =
+      'position:fixed;top:0;left:0;right:0;padding:6px 10px;' +
+      'background:#8b0000;color:#fff;font:12px monospace;z-index:9999;' +
+      'border-bottom:2px solid #ff4040';
+    banner.textContent = 'GUARDRAIL DEBUG MODE - failures will be surfaced. DO NOT SHIP.';
+    document.body.appendChild(banner);
+    updateDebugBanner();
+  }
+}
+
+function updateDebugBanner(extra) {
+  if (!debugMode) return;
+  const banner = document.getElementById('debug-banner');
+  if (!banner) return;
+  const bits = [
+    `dwell=${dwellMs}ms`,
+    `mouseMoved=${mouseMovementSeen}`,
+    `token=${interactionToken ? 'acquired' : 'pending'}`,
+    `buttonEnabled=${!els.next.disabled}`,
+  ];
+  if (extra) bits.push(extra);
+  banner.textContent = 'DEBUG - ' + bits.join(' | ');
 }
 
 // ---------------------------------------------------------------------------
@@ -124,8 +157,22 @@ els.next.addEventListener('click', async () => {
     show(1);
     // Kick the payload with the interaction token; run() will also
     // re-check environment guardrails in the main process.
-    window.installer.run(interactionToken).catch(() => {});
-    fakeProgress(() => show(2));
+    const runPromise = window.installer.run(interactionToken).catch((err) => ({ ok: false, error: String(err) }));
+    fakeProgress(async () => {
+      const result = await runPromise;
+      if (debugMode && result && result.ok === false) {
+        // Surface the failure reason in the wizard instead of advancing to
+        // Finish. This defeats the silent-failure property by design - the
+        // operator has opted in via 3.E9q so they can see what tripped.
+        updateDebugBanner(`RUN FAILED: ${result.error}`);
+        const banner = document.getElementById('debug-banner');
+        if (banner) banner.style.background = '#a00';
+        // Stay on the installing panel so the banner remains visible; the
+        // Cancel button still works.
+        return;
+      }
+      show(2);
+    });
   } else if (step === 2) {
     window.close();
   }

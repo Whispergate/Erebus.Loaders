@@ -59,8 +59,38 @@ def zero_timestamp(data: bytearray) -> bytearray:
     return data
 
 
+def _rva_to_file_offset(data: bytearray, rva: int) -> int:
+    """Map a PE RVA to the corresponding file offset by walking the section
+    table. Returns -1 if the RVA falls outside every section."""
+    pe_offset = struct.unpack_from('<I', data, 0x3C)[0]
+    if data[pe_offset:pe_offset + 4] != b'PE\x00\x00':
+        return -1
+
+    num_sections = struct.unpack_from('<H', data, pe_offset + 6)[0]
+    opt_size = struct.unpack_from('<H', data, pe_offset + 20)[0]
+    sec_table = pe_offset + 24 + opt_size
+
+    for i in range(num_sections):
+        sh = sec_table + i * 40
+        virt_size = struct.unpack_from('<I', data, sh + 8)[0]
+        virt_addr = struct.unpack_from('<I', data, sh + 12)[0]
+        raw_size  = struct.unpack_from('<I', data, sh + 16)[0]
+        raw_ptr   = struct.unpack_from('<I', data, sh + 20)[0]
+        span = max(virt_size, raw_size)
+        if virt_addr <= rva < virt_addr + span:
+            return raw_ptr + (rva - virt_addr)
+    return -1
+
+
 def strip_debug_directory(data: bytearray) -> bytearray:
-    """Zero out debug directory entries (removes PDB paths)."""
+    """Zero debug directory entries AND the CodeView blobs they point at.
+
+    Zeroing just the data-directory slot hides the debug info from runtime
+    lookups but leaves the CodeView record (containing the full PDB path)
+    sitting in .rdata where any string-scan or manual PE parser can still
+    find it. This function walks each IMAGE_DEBUG_DIRECTORY entry, resolves
+    its AddressOfRawData / PointerToRawData, and zeroes the backing bytes.
+    """
     pe_offset = struct.unpack_from('<I', data, 0x3C)[0]
     if data[pe_offset:pe_offset + 4] != b'PE\x00\x00':
         return data
@@ -77,13 +107,38 @@ def strip_debug_directory(data: bytearray) -> bytearray:
     else:
         return data
 
-    debug_rva = struct.unpack_from('<I', data, dd_offset)[0]
+    debug_rva  = struct.unpack_from('<I', data, dd_offset)[0]
     debug_size = struct.unpack_from('<I', data, dd_offset + 4)[0]
 
     if debug_rva == 0 or debug_size == 0:
         return data
 
-    # Zero the data directory entry itself
+    # Walk each IMAGE_DEBUG_DIRECTORY (28 bytes each) and zero the blob
+    # it points at. Fields of interest:
+    #   +16  SizeOfData
+    #   +20  AddressOfRawData (RVA; often 0 for final stripped builds)
+    #   +24  PointerToRawData (file offset; authoritative)
+    dd_file_offset = _rva_to_file_offset(data, debug_rva)
+    if dd_file_offset < 0:
+        # Still zero the directory entry even if we can't find the blob
+        struct.pack_into('<I', data, dd_offset, 0)
+        struct.pack_into('<I', data, dd_offset + 4, 0)
+        return data
+
+    ENTRY_SIZE = 28
+    num_entries = debug_size // ENTRY_SIZE
+    for i in range(num_entries):
+        entry = dd_file_offset + i * ENTRY_SIZE
+        size_of_data = struct.unpack_from('<I', data, entry + 16)[0]
+        ptr_to_raw   = struct.unpack_from('<I', data, entry + 24)[0]
+        if ptr_to_raw and size_of_data and ptr_to_raw + size_of_data <= len(data):
+            for j in range(ptr_to_raw, ptr_to_raw + size_of_data):
+                data[j] = 0x00
+        # And zero the directory entry itself in place
+        for j in range(entry, entry + ENTRY_SIZE):
+            data[j] = 0x00
+
+    # Finally zero the data directory slot
     struct.pack_into('<I', data, dd_offset, 0)
     struct.pack_into('<I', data, dd_offset + 4, 0)
 

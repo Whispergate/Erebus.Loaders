@@ -352,28 +352,48 @@ CheckResult CheckIPAddress(const char** allowed, int allowed_count,
 
 CheckResult CheckDebuggerPresent() {
     CheckResult result;
-    
-    // IsDebuggerPresent check
+
+    // Layer 1: IsDebuggerPresent (easily patched, but catches lazy debuggers).
     if (IsDebuggerPresent()) {
         result.passed = false;
         result.reason = "Debugger detected (IsDebuggerPresent)";
         return result;
     }
-    
-    // PEB BeingDebugged flag check
-    BOOL beingDebugged = FALSE;
+
+    // Layer 2: direct PEB reads. Bypasses any user-mode hook on
+    // IsDebuggerPresent and covers flags that IsDebuggerPresent ignores.
     #ifdef _WIN64
         PPEB peb = (PPEB)__readgsqword(0x60);
     #else
         PPEB peb = (PPEB)__readfsdword(0x30);
     #endif
-    
-    if (peb && peb->BeingDebugged) {
+
+    if (!peb) {
+        result.passed = true;
+        result.reason = "PEB unavailable";
+        return result;
+    }
+
+    if (peb->BeingDebugged) {
         result.passed = false;
         result.reason = "Debugger detected (PEB.BeingDebugged)";
         return result;
     }
-    
+
+    // PEB.NtGlobalFlag: when a debugger launches a process, the loader sets
+    // FLG_HEAP_ENABLE_TAIL_CHECK (0x10) | FLG_HEAP_ENABLE_FREE_CHECK (0x20) |
+    // FLG_HEAP_VALIDATE_PARAMETERS (0x40). A normally-started process has
+    // these bits clear. Attackers who flip BeingDebugged almost always
+    // forget NtGlobalFlag.
+    ULONG ntGlobalFlag = peb->NtGlobalFlag;
+    if (ntGlobalFlag & (FLG_HEAP_ENABLE_TAIL_CHECK |
+                        FLG_HEAP_ENABLE_FREE_CHECK |
+                        FLG_HEAP_VALIDATE_PARAMETERS)) {
+        result.passed = false;
+        result.reason = "Debugger detected (PEB.NtGlobalFlag heap flags)";
+        return result;
+    }
+
     result.passed = true;
     result.reason = "No debugger detected";
     return result;
@@ -381,7 +401,7 @@ CheckResult CheckDebuggerPresent() {
 
 CheckResult CheckRemoteDebugger() {
     CheckResult result;
-    
+
     typedef NTSTATUS (NTAPI *pNtQueryInformationProcess)(
         HANDLE ProcessHandle,
         PROCESSINFOCLASS ProcessInformationClass,
@@ -389,7 +409,7 @@ CheckResult CheckRemoteDebugger() {
         ULONG ProcessInformationLength,
         PULONG ReturnLength
     );
-    
+
     HMODULE hNtdll = ImportModule("ntdll.dll");
     if (!hNtdll) {
         result.passed = true;
@@ -398,112 +418,124 @@ CheckResult CheckRemoteDebugger() {
     }
 
     ImportFunction(hNtdll, NtQueryInformationProcess, pNtQueryInformationProcess);
-    
-    if (NtQueryInformationProcess) {
-        DWORD_PTR debugPort = 0;
-        NTSTATUS status = NtQueryInformationProcess(
-            GetCurrentProcess(),
-            ProcessDebugPort,
-            &debugPort,
-            sizeof(debugPort),
-            NULL
-        );
-        
-        if (status == 0 && debugPort != 0) {
-            result.passed = false;
-            result.reason = "Remote debugger detected";
-            return result;
-        }
+    if (!NtQueryInformationProcess) {
+        result.passed = true;
+        result.reason = "NtQueryInformationProcess unresolved";
+        return result;
     }
-    
+
+    HANDLE self = GetCurrentProcess();
+
+    // Query 1: ProcessDebugPort (info class 7). Non-zero port means a
+    // user-mode debugger is attached (cdb, x64dbg, WinDbg, etc.).
+    DWORD_PTR debugPort = 0;
+    NTSTATUS status = NtQueryInformationProcess(
+        self, ProcessDebugPort, &debugPort, sizeof(debugPort), NULL);
+    if (NT_SUCCESS(status) && debugPort != 0) {
+        result.passed = false;
+        result.reason = "Remote debugger detected (ProcessDebugPort)";
+        return result;
+    }
+
+    // Query 2: ProcessDebugObjectHandle (info class 30). Kernel debuggers
+    // and modern attach paths expose a debug-object handle even when the
+    // legacy port is zero. Non-NULL handle = debugged.
+    HANDLE debugObject = NULL;
+    status = NtQueryInformationProcess(
+        self, ProcessDebugObjectHandle, &debugObject, sizeof(debugObject), NULL);
+    if (NT_SUCCESS(status) && debugObject != NULL) {
+        result.passed = false;
+        result.reason = "Remote debugger detected (ProcessDebugObjectHandle)";
+        return result;
+    }
+
+    // Query 3: ProcessDebugFlags (info class 31). The kernel returns the
+    // *inverse* of EPROCESS.NoDebugInherit; a value of 0 means the process
+    // is being debugged. Catches detachers that leave the flag behind.
+    ULONG debugFlags = 0;
+    status = NtQueryInformationProcess(
+        self, ProcessDebugFlags, &debugFlags, sizeof(debugFlags), NULL);
+    if (NT_SUCCESS(status) && debugFlags == 0) {
+        result.passed = false;
+        result.reason = "Remote debugger detected (ProcessDebugFlags)";
+        return result;
+    }
+
     result.passed = true;
     result.reason = "No remote debugger detected";
     return result;
 }
 
-bool IsProcessRunning(const wchar_t* processName) {
-    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (hSnapshot == INVALID_HANDLE_VALUE) {
-        return false;
-    }
-    
-    PROCESSENTRY32W pe32 = {0};
-    pe32.dwSize = sizeof(PROCESSENTRY32W);
-    
-    bool found = false;
-    if (Process32FirstW(hSnapshot, &pe32)) {
-        do {
-            // Case-insensitive comparison
-            if (_wcsicmp(pe32.szExeFile, processName) == 0) {
-                found = true;
-                break;
-            }
-        } while (Process32NextW(hSnapshot, &pe32));
-    }
-    
-    CloseHandle(hSnapshot);
-    return found;
-}
-
 CheckResult CheckDebuggerProcesses() {
     CheckResult result;
-    
-    // List of common debugger process names
-    const wchar_t* debuggerProcesses[] = {
-        L"x64dbg.exe",
-        L"x32dbg.exe",
-        L"windbg.exe",
-        L"ollydbg.exe",
-        L"ida.exe",
-        L"ida64.exe",
-        L"idag.exe",
-        L"idag64.exe",
-        L"idaw.exe",
-        L"idaw64.exe",
-        L"idaq.exe",
-        L"idaq64.exe",
-        L"idau.exe",
-        L"idau64.exe",
-        L"scylla.exe",
-        L"scylla_x64.exe",
-        L"scylla_x86.exe",
-        L"protection_id.exe",
-        L"x96dbg.exe",
-        L"immunitydebugger.exe",
-        L"ImportREC.exe",
-        L"MegaDumper.exe",
-        L"LordPE.exe",
-        L"reshacker.exe",
-        L"ResourceHacker.exe",
-        L"ImportREC.exe",
-        L"IMMUNITYDEBUGGER.EXE",
-        L"devenv.exe",         // Visual Studio
-        L"dnSpy.exe",
-        L"dnSpy-x86.exe",
-        L"de4dot.exe",
-        L"ilspy.exe",
-        L"Fiddler.exe",
-        L"charles.exe",
-        L"Wireshark.exe",
-        L"dumpcap.exe",
-        L"tcpdump.exe",
-        L"ProcessHacker.exe",
-        L"procmon.exe",
-        L"procexp.exe",
-        L"procmon64.exe",
-        L"procexp64.exe"
+
+    // Hashed debugger/analysis process list. Each entry is a compile-time
+    // FNV1a hash via H(); the string literals never reach .rdata under -O2
+    // because the hash is forced through a template non-type parameter.
+    // At runtime, ProcessGetPidFromHashedListEx walks NtQuerySystemInformation
+    // results and hashes each image name for comparison - no string match,
+    // no contiguous name array for scanners to fingerprint.
+    static DWORD debugger_hashes[] = {
+        H("x64dbg.exe"),
+        H("x32dbg.exe"),
+        H("x96dbg.exe"),
+        H("windbg.exe"),
+        H("ollydbg.exe"),
+        H("immunitydebugger.exe"),
+        H("ida.exe"),
+        H("ida64.exe"),
+        H("idag.exe"),
+        H("idag64.exe"),
+        H("idaw.exe"),
+        H("idaw64.exe"),
+        H("idaq.exe"),
+        H("idaq64.exe"),
+        H("idau.exe"),
+        H("idau64.exe"),
+        H("radare2.exe"),
+        H("scylla.exe"),
+        H("scylla_x64.exe"),
+        H("scylla_x86.exe"),
+        H("protection_id.exe"),
+        H("importrec.exe"),
+        H("megadumper.exe"),
+        H("lordpe.exe"),
+        H("reshacker.exe"),
+        H("resourcehacker.exe"),
+        H("devenv.exe"),            // Visual Studio
+        H("dnspy.exe"),
+        H("dnspy-x86.exe"),
+        H("dnspyex.exe"),
+        H("dotpeek.exe"),
+        H("ilspy.exe"),
+        H("de4dot.exe"),
+        H("jetbrains.rider.exe"),
+        H("fiddler.exe"),
+        H("fiddler everywhere.exe"),
+        H("charles.exe"),
+        H("burpsuite.exe"),
+        H("wireshark.exe"),
+        H("dumpcap.exe"),
+        H("tcpdump.exe"),
+        H("processhacker.exe"),
+        H("procmon.exe"),
+        H("procmon64.exe"),
+        H("procexp.exe"),
+        H("procexp64.exe"),
+        H("autoruns.exe"),
+        H("autorunsc.exe"),
     };
-    
-    int numDebuggers = sizeof(debuggerProcesses) / sizeof(debuggerProcesses[0]);
-    
-    for (int i = 0; i < numDebuggers; i++) {
-        if (IsProcessRunning(debuggerProcesses[i])) {
-            result.passed = false;
-            result.reason = "Debugger process detected";
-            return result;
-        }
+
+    DWORD pid = erebus::ProcessGetPidFromHashedList(
+        debugger_hashes,
+        sizeof(debugger_hashes) / sizeof(debugger_hashes[0]));
+
+    if (pid != 0) {
+        result.passed = false;
+        result.reason = "Debugger process detected";
+        return result;
     }
-    
+
     result.passed = true;
     result.reason = "No debugger processes detected";
     return result;
@@ -511,19 +543,36 @@ CheckResult CheckDebuggerProcesses() {
 
 CheckResult CheckHardwareBreakpoints() {
     CheckResult result;
-    
+
     CONTEXT ctx = {0};
     ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
-    
+
     if (GetThreadContext(GetCurrentThread(), &ctx)) {
-        // Check if any debug registers are set
-        if (ctx.Dr0 != 0 || ctx.Dr1 != 0 || ctx.Dr2 != 0 || ctx.Dr3 != 0) {
+        // A hardware breakpoint is "live" only when both the Drn address
+        // register is populated AND the matching local / global enable bit
+        // is set in Dr7. Checking Drn != 0 alone produces false positives
+        // from stale values that a previous debugger left behind, and can
+        // be bypassed by an attacker who sets Dr0-Dr3 without enabling
+        // them in Dr7 (then re-arms Dr7 at execution time via another
+        // thread).
+        //
+        // Dr7 enable-bit layout:
+        //   bits 0,1 -> Dr0 (L0 | G0)
+        //   bits 2,3 -> Dr1 (L1 | G1)
+        //   bits 4,5 -> Dr2 (L2 | G2)
+        //   bits 6,7 -> Dr3 (L3 | G3)
+        bool dr0_active = (ctx.Dr0 != 0) && ((ctx.Dr7 & 0x3)  != 0);
+        bool dr1_active = (ctx.Dr1 != 0) && ((ctx.Dr7 & 0xC)  != 0);
+        bool dr2_active = (ctx.Dr2 != 0) && ((ctx.Dr7 & 0x30) != 0);
+        bool dr3_active = (ctx.Dr3 != 0) && ((ctx.Dr7 & 0xC0) != 0);
+
+        if (dr0_active || dr1_active || dr2_active || dr3_active) {
             result.passed = false;
             result.reason = "Hardware breakpoints detected";
             return result;
         }
     }
-    
+
     result.passed = true;
     result.reason = "No hardware breakpoints detected";
     return result;
@@ -531,40 +580,34 @@ CheckResult CheckHardwareBreakpoints() {
 
 CheckResult CheckTimingAnomaly() {
     CheckResult result;
-    
-    // RDTSC timing check
+
+    // Two back-to-back rdtsc reads around a tight arithmetic loop. On bare
+    // metal / a normal VM this completes in a few thousand cycles; under
+    // single-step or instruction-level tracing it balloons by >10x because
+    // every iteration costs a VM exit / debugger round-trip.
+    //
+    // We deliberately DO NOT use Sleep() here. Sleep-based checks are easy
+    // for a debugger user to defeat by setting "skip sleeps" or by patching
+    // NtDelayExecution, and the surrounding Sleep() call itself shows up in
+    // static analysis as an anti-analysis hint. Pure rdtsc is silent.
+    volatile ULONG sink = 0;
     DWORD64 start = __rdtsc();
-    
-    // Perform some simple operations
-    volatile int x = 0;
-    for (int i = 0; i < 100; i++) {
-        x += i;
+    for (int i = 0; i < 2048; i++) {
+        sink += (ULONG)(i * 0x9E3779B1u);
     }
-    
     DWORD64 end = __rdtsc();
     DWORD64 elapsed = end - start;
-    
-    // If execution took suspiciously long (> 100000 cycles for simple loop)
-    // it may indicate single-stepping or breakpoints
-    if (elapsed > 100000) {
+    (void)sink;
+
+    // Threshold: ~200k cycles on a modern CPU is already pessimistic for
+    // 2048 iterations of a single MUL+ADD. Anything above 2M strongly
+    // suggests single-step or heavy instrumentation.
+    if (elapsed > 2000000ULL) {
         result.passed = false;
         result.reason = "Timing anomaly detected (possible debugger)";
         return result;
     }
-    
-    // GetTickCount timing check
-    DWORD tick_start = GetTickCount();
-    Sleep(10);
-    DWORD tick_end = GetTickCount();
-    DWORD tick_elapsed = tick_end - tick_start;
-    
-    // Sleep(10) should take ~10-20ms, if it's much longer, debugger may be present
-    if (tick_elapsed > 100) {
-        result.passed = false;
-        result.reason = "Sleep timing anomaly detected";
-        return result;
-    }
-    
+
     result.passed = true;
     result.reason = "No timing anomalies detected";
     return result;

