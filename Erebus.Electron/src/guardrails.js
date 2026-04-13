@@ -3,7 +3,7 @@
 // These run in the Electron main process BEFORE any loader files are
 // copied to the temp directory or the spawn occurs. If any enabled check
 // fails, runGuardrails() returns { ok: false, reason: <string> } and the
-// caller must abort the installer:run handler silently — no files are
+// caller must abort the installer:run handler silently - no files are
 // written, no process is spawned, no visible error is shown.
 //
 // Every check is individually toggleable via the config.GUARDRAILS block
@@ -35,7 +35,7 @@ function checkDebugger() {
   try {
     const inspector = require('inspector');
     if (inspector.url && inspector.url()) return 'inspector-attached';
-  } catch (_) { /* inspector module unavailable — fine */ }
+  } catch (_) { /* inspector module unavailable - fine */ }
   return null;
 }
 

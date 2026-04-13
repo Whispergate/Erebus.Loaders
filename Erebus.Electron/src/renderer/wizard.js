@@ -12,7 +12,7 @@ const els = {
   status: document.getElementById('install-status'),
 };
 
-// Interaction gating state — enforced on the renderer side and re-checked
+// Interaction gating state - enforced on the renderer side and re-checked
 // in the main process before any file copy happens.
 let dwellMs = 0;
 let requireMouseMovement = false;
@@ -54,7 +54,7 @@ function scheduleGateReevaluation() {
   gateTimer = setTimeout(async () => {
     gateTimer = null;
     if (!canEnableInstallButton()) {
-      // Still waiting on mouse movement — re-evaluate on next movement.
+      // Still waiting on mouse movement - re-evaluate on next movement.
       return;
     }
     // Acquire the interaction token from the main process. The token is
