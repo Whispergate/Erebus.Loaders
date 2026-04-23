@@ -138,6 +138,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\config.hpp" />
+    <ClInclude Include="include\evasion\callstack_spoof.hpp" />
+    <ClInclude Include="include\evasion\evasion.hpp" />
+    <ClInclude Include="include\evasion\sw3\Syscalls.h" />
+    <ClInclude Include="include\evasion\sw3\SysWhispers.h" />
+    <ClInclude Include="include\evasion\syscall_backend.hpp" />
+    <ClInclude Include="include\evasion\syscalls.hpp" />
+    <ClInclude Include="include\guardrails\guardrails.hpp" />
     <ClInclude Include="include\injection\injection_createfiber.hpp" />
     <ClInclude Include="include\injection\injection_dispatch.hpp" />
     <ClInclude Include="include\injection\injection_earlycascade.hpp" />
@@ -150,6 +157,13 @@
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\evasion\callstack_spoof.cpp" />
+    <ClCompile Include="src\evasion\evasion.cpp" />
+    <ClCompile Include="src\evasion\ntdll_unhook.cpp" />
+    <ClCompile Include="src\evasion\sw3_backend.cpp" />
+    <ClCompile Include="src\evasion\Syscalls.c" />
+    <ClCompile Include="src\evasion\syscalls.cpp" />
+    <ClCompile Include="src\guardrails\guardrails.cpp" />
     <ClCompile Include="src\injection\injection_createfiber.cpp" />
     <ClCompile Include="src\injection\injection_earlycascade.cpp" />
     <ClCompile Include="src\injection\injection_ntmapviewofsection.cpp" />
@@ -162,6 +176,11 @@
     <ClCompile Include="src\helpers\process_helpers.cpp" />
     <ClCompile Include="src\loader.cpp" />
     <ClCompile Include="src\main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="src\evasion\callstack_spoof.asm" />
+    <MASM Include="src\evasion\Syscalls-asm.x64.asm" />
+    <MASM Include="src\evasion\Syscalls-asm.x86.asm" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

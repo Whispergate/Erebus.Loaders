@@ -14,6 +14,10 @@
 #include "injection/injection_poolparty.hpp"
 #include <cmath>
 
+#if CONFIG_CALLSTACK_SPOOF_ENABLED
+#include "evasion/callstack_spoof.hpp"
+#endif
+
 // Define missing SAL annotations for compatibility
 #ifndef _In_
 #define _In_

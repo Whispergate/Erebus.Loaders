@@ -156,6 +156,28 @@
 #define CONFIG_GUARDRAILS_DECOY_FILE ""
 #endif
 
+// ============================================
+// SYSCALL BACKEND CONFIGURATION
+// ============================================
+
+// 0 = TartarusGate  (built-in indirect syscall shim page, default)
+// 1 = SysWhispers3  (generated stubs; requires include/evasion/sw3/ files)
+#ifndef CONFIG_SYSCALL_BACKEND
+#define CONFIG_SYSCALL_BACKEND 0
+#endif
+
+// ============================================
+// CALLSTACK SPOOFING CONFIGURATION
+// ============================================
+
+// 0 = disabled
+// 1 = enabled — InitCallstackSpoof() runs in RunEvasionPatches(), locating
+//     `add rsp, 0x68; ret` in ntdll/kernel32. Use GetSpoofGadget() to fill
+//     SpoofContext::Gadget, then call SpoofCall() at injection sites.
+#ifndef CONFIG_CALLSTACK_SPOOF_ENABLED
+#define CONFIG_CALLSTACK_SPOOF_ENABLED 0
+#endif
+
 // Helper function to get configured guardrails
 inline erebus::guardrails::GuardrailConfig GetGuardrailConfig() {
     erebus::guardrails::GuardrailConfig config = erebus::guardrails::GetDefaultConfig();

