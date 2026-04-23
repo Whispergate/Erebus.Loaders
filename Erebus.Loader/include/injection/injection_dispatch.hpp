@@ -15,6 +15,8 @@ namespace erebus {
 		return &InjectionEarlyCascade;
 	#elif CONFIG_INJECTION_TYPE == 4
 		return &InjectionPoolParty;
+	#elif CONFIG_INJECTION_TYPE == 5
+		return &InjectionNtQueueApcThread;
 	#else
 		return nullptr;
 	#endif

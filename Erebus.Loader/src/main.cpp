@@ -10,7 +10,6 @@ VOID entry(void)
 	// EVASION PATCHES - run before any shellcode processing
 	// ============================================================
 	erebus::evasion::RunEvasionPatches();
-
 	// ============================================================
 	// GUARDRAILS CHECK
 	// ============================================================
