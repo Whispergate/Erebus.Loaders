@@ -1426,7 +1426,13 @@ typedef struct _IO_STATUS_BLOCK
 
 #endif // _WINTERNL_ - Types after this point are not in standard winternl.h
 
-// These types are not in winternl.h and must always be defined
+// These types are not in winternl.h. They DO overlap with the SysWhispers3
+// Syscalls.h block (SECTION_INHERIT, PS_ATTRIBUTE, PS_CREATE_STATE, ...), so
+// translation units that pull Syscalls.h in first (sw3_backend.cpp) define
+// EREBUS_SKIP_NT_EXTENSIONS before including this header to avoid duplicate
+// definitions. The PCUNICODE_STRING / PTEB / PPEB aliases referenced in the
+// typedef signatures past line ~2050 must be provided by the skipping TU.
+#ifndef EREBUS_SKIP_NT_EXTENSIONS
 typedef enum _SECTION_INHERIT
 {
 	ViewShare = 1,
@@ -2215,6 +2221,8 @@ typedef NTSTATUS(NTAPI* typeRtlCreateUnicodeString)(
 	_Out_ PUNICODE_STRING DestinationString,
 	_In_opt_z_ PCWSTR SourceString
 	);
+
+#endif // EREBUS_SKIP_NT_EXTENSIONS
 
 #pragma endregion
 

