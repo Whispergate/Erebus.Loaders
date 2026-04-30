@@ -271,36 +271,48 @@ namespace erebus {
 
 	CompressionFormat DetectCompressionFormat(_In_ const BYTE* Input, IN SIZE_T InputLen)
 	{
-	    if (!Input || InputLen < 2)
+	    if (!Input || InputLen < 3)
 	        return FORMAT_NONE;
 
-	    WORD Header = *(WORD*)Input;
-	
 	    // Check for LZNT1: bit 15 set AND signature bits [14:12] == 3
+	    WORD Header = *(WORD*)Input;
 	    if ((Header & 0x8000) && ((Header & 0x7000) >> 12) == 0x3)
 	    {
 	        WORD ChunkSize = (Header & 0x0FFF) + 1;
-	        if (ChunkSize > 0 && ChunkSize <= InputLen - 2)
+	        // Verify chunk size is plausible and first chunk contains non-zero data
+	        if (ChunkSize >= 2 && (SIZE_T)(ChunkSize + 2) <= InputLen && Input[2] != 0x00)
 	        {
 	            LOG_INFO("Detected LZNT1 compression (chunk size: %d)", ChunkSize);
 	            return FORMAT_LZNT1;
 	        }
 	    }
 
-	    // Check for RLE markers
+	    // Walk the buffer as an RLE stream: advance +3 on a valid run, +1 otherwise.
+	    // A valid run requires: marker 0xFF, count >= 2 (count=0/1 saves no space).
+	    // Require at least 2 confirmed valid runs to avoid false positives from
+	    // incidental 0xFF bytes in uncompressed or encrypted data.
 	    if (InputLen >= 3)
 	    {
-	        int RleMarkerCount = 0;
-	        for (SIZE_T i = 0; i < min(InputLen - 2, 100); i++)
+	        int ValidRunCount = 0;
+	        SIZE_T ScanLimit = min(InputLen, (SIZE_T)256);
+	        SIZE_T i = 0;
+	        while (i < ScanLimit)
 	        {
 	            if (Input[i] == 0xFF && i + 2 < InputLen)
 	            {
-	                RleMarkerCount++;
+	                BYTE RunCount = Input[i + 1];
+	                if (RunCount >= 2)
+	                {
+	                    ValidRunCount++;
+	                    i += 3;
+	                    continue;
+	                }
 	            }
+	            i++;
 	        }
-	        if (RleMarkerCount > 0)
+	        if (ValidRunCount >= 2)
 	        {
-	            LOG_INFO("Detected RLE compression (%d markers found)", RleMarkerCount);
+	            LOG_INFO("Detected RLE compression (%d valid runs found)", ValidRunCount);
 	            return FORMAT_RLE;
 	        }
 	    }
