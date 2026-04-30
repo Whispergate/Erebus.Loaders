@@ -2404,15 +2404,26 @@ namespace erebus {
 		return (c >= 'A' && c <= 'Z') ? (c + 32) : c;
 	}
 
+	// Canonical FNV1a 32-bit prime. MUST be odd: an even multiplier
+	// collapses the low bits of Hash on every iteration, so distinct
+	// strings collide to the same value. Earlier revisions used
+	// `Prime = RandomHashSeed()` to randomise the prime per build, but
+	// RandomHashSeed() is constexpr-deterministic (so Prime == Hash on
+	// every call) AND ~50% of operator-generated seeds are even, which
+	// produced silent hash collisions between e.g. ntdll.dll and
+	// kernel32.dll and crashed the loader at GetModuleHandleC time.
+	// We keep the per-build randomisation on the offset basis (Hash)
+	// for YARA evasion and pin Prime to the standard FNV1a constant.
+	constexpr ULONG kFnv1aPrime = 0x01000193u;
+
 	constexpr ULONG HashStringFowlerNollVoVariant1a(_In_ LPCSTR String)
 	{
 		ULONG Hash = erebus::RandomHashSeed();
-		ULONG Prime = erebus::RandomHashSeed();
 
 		while (*String)
 		{
 			Hash ^= erebus::HashToLower((UCHAR)*String++);
-			Hash *= Prime;
+			Hash *= kFnv1aPrime;
 		}
 
 		return Hash;
@@ -2420,12 +2431,11 @@ namespace erebus {
 	constexpr ULONG HashStringFowlerNollVoVariant1a(_In_ LPCWSTR String)
 	{
 		ULONG Hash = erebus::RandomHashSeed();
-		ULONG Prime = erebus::RandomHashSeed();
 
 		while (*String)
 		{
 			Hash ^= erebus::HashToLower((UCHAR)*String++);
-			Hash *= Prime;
+			Hash *= kFnv1aPrime;
 		}
 
 		return Hash;
