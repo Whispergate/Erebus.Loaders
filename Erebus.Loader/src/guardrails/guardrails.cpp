@@ -1,4 +1,9 @@
 #define _WIN32_WINNT _WIN32_WINNT_VISTA
+#ifdef _MSC_VER
+#include <intrin.h>
+#else
+#include <x86intrin.h>
+#endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <iphlpapi.h>
@@ -852,7 +857,7 @@ CheckResult CheckSandboxEnvironment() {
         "C:\\sandbox\\starter.exe",      // Generic sandbox
         "C:\\analysis\\start.bat",       // Analysis VM
     };
-    for (int i = 0; i < sizeof(sandboxFiles) / sizeof(sandboxFiles[0]); i++) {
+    for (size_t i = 0; i < sizeof(sandboxFiles) / sizeof(sandboxFiles[0]); i++) {
         DWORD attrs = GetFileAttributesA(sandboxFiles[i]);
         if (attrs != INVALID_FILE_ATTRIBUTES) {
             result.passed = false;
