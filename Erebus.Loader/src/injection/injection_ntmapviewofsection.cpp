@@ -43,7 +43,7 @@ namespace erebus {
 
 		LOG_SUCCESS("Section created");
 
-		// Double-map pattern — canonical NtMapViewOfSection injection.
+		// Double-map pattern - canonical NtMapViewOfSection injection.
 		//
 		// History of failed simplifications that led here:
 		//   1. Single-map RX + NtWriteVirtualMemory: failed with
@@ -55,7 +55,7 @@ namespace erebus {
 		//      with STATUS_SECTION_PROTECTION (0xC000004E). Modern Windows
 		//      (ACG / no-new-executable-pages) refuses to grant EXECUTE
 		//      to a section-backed view that was mapped without it, even
-		//      when the section max permits RWX — the mitigation looks at
+		//      when the section max permits RWX - the mitigation looks at
 		//      the view's initial protection, not the section's max.
 		//
 		// The working pattern: map the section TWICE. Local view is RW
@@ -121,7 +121,7 @@ namespace erebus {
 			return;
 		}
 
-		// Drop the local RW mapping immediately — the shellcode bytes
+		// Drop the local RW mapping immediately - the shellcode bytes
 		// live in the section, not in our process address space. Any
 		// future static-scanner sweep of our own VAD sees no writable
 		// shared mapping.

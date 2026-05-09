@@ -12,11 +12,17 @@
 #include "injection/injection_createfiber.hpp"
 #include "injection/injection_earlycascade.hpp"
 #include "injection/injection_poolparty.hpp"
+#include "injection/injection_module_stomp.hpp"
+#include "injection/injection_kernelcallback.hpp"
+#include "injection/injection_txf_hollow.hpp"
 #include <cmath>
 
 #if CONFIG_CALLSTACK_SPOOF_ENABLED
 #include "evasion/callstack_spoof.hpp"
 #endif
+#include "evasion/amsi_bypass.hpp"
+#include "evasion/etw_bypass.hpp"
+#include "evasion/unhook_extended.hpp"
 
 // Define missing SAL annotations for compatibility
 #ifndef _In_

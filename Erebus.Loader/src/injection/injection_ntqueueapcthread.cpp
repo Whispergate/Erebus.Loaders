@@ -1,7 +1,7 @@
 #include "../../include/loader.hpp"
 
 namespace erebus {
-// CONFIG_INJECTION_TYPE == 5 — vanilla NtQueueApcThread (Remote, Early Bird).
+// CONFIG_INJECTION_TYPE == 5 - vanilla NtQueueApcThread (Remote, Early Bird).
 //
 // Sibling of `injection_earlycascade.cpp` (type 3). Both queue an APC to a
 // suspended thread in a remote process, but this variant adds a jittered

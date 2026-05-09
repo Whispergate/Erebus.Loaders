@@ -157,7 +157,7 @@ ifeq ($(CONFIG_SYSCALL_BACKEND),1)
 endif
 ifeq ($(CONFIG_CALLSTACK_SPOOF_ENABLED),1)
     CFLAGS   += -DCONFIG_CALLSTACK_SPOOF_ENABLED=1
-    # SpoofCall() lives in callstack_spoof_gas.S — a GAS port of the
+    # SpoofCall() lives in callstack_spoof_gas.S - a GAS port of the
     # MASM-only callstack_spoof.asm so MinGW's as can consume it. x64
     # only; the trampoline uses the Win64 ABI (shadow space + r10/r11
     # scratch) and has no x86 counterpart, so silently drop it there.

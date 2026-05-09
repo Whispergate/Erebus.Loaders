@@ -1,4 +1,4 @@
-; callstack_spoof.asm  —  x64 MASM
+; callstack_spoof.asm  -  x64 MASM
 ;
 ; SpoofCall(SpoofContext* ctx)
 ;

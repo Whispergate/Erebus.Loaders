@@ -1,5 +1,5 @@
 /*
- * callstack_spoof_gas.S — x64 MinGW port of callstack_spoof.asm (MASM).
+ * callstack_spoof_gas.S - x64 MinGW port of callstack_spoof.asm (MASM).
  *
  * Provides SpoofCall(SpoofContext* ctx). Semantics, stack layout, and
  * register usage mirror the MASM source 1:1; see callstack_spoof.asm

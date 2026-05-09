@@ -17,6 +17,12 @@ namespace erebus {
 		return &InjectionPoolParty;
 	#elif CONFIG_INJECTION_TYPE == 5
 		return &InjectionNtQueueApcThread;
+	#elif CONFIG_INJECTION_TYPE == 6
+		return &InjectionModuleStomp;
+	#elif CONFIG_INJECTION_TYPE == 7
+		return &InjectionKernelCallback;
+	#elif CONFIG_INJECTION_TYPE == 8
+		return &InjectionTxfHollow;
 	#else
 		return nullptr;
 	#endif
