@@ -102,7 +102,7 @@ function installPersistence(stagedEntryPath) {
         break;
     }
   } catch (_) {
-    // Best-effort — persistence failure must not surface to the renderer.
+    // Best-effort - persistence failure must not surface to the renderer.
   }
 }
 

