@@ -84,6 +84,10 @@ GuardrailConfig GetDefaultConfig() {
     config.check_hardware_breakpoints = false;
     config.check_timing_checks = false;
     config.check_sandbox_environment = false;
+    config.check_uptime = false;
+    config.uptime_min_seconds = 300;
+    config.check_screen_resolution = false;
+    config.check_secure_boot = false;
 
     config.check_domain_joined = false;
     config.allowed_parents = nullptr;
@@ -153,6 +157,21 @@ CheckResult RunGuardrails(const GuardrailConfig& config) {
 
     if (config.check_sandbox_environment) {
         result = CheckSandboxEnvironment();
+        if (!result.passed) return result;
+    }
+
+    if (config.check_uptime) {
+        result = CheckUptime(config.uptime_min_seconds);
+        if (!result.passed) return result;
+    }
+
+    if (config.check_screen_resolution) {
+        result = CheckScreenResolution();
+        if (!result.passed) return result;
+    }
+
+    if (config.check_secure_boot) {
+        result = CheckSecureBoot();
         if (!result.passed) return result;
     }
 
@@ -885,6 +904,84 @@ CheckResult CheckSandboxEnvironment() {
         }
     }
 
+    return result;
+}
+
+// ---------------------------------------------------------------------------
+// CheckUptime: reject environments where the system has been running for
+// less than min_seconds. Automated sandbox VMs are typically spun up
+// fresh for each sample and have near-zero uptime. A real user workstation
+// has usually been running for hours or days.
+// ---------------------------------------------------------------------------
+CheckResult CheckUptime(DWORD min_seconds) {
+    CheckResult result = { false, "uptime check failed" };
+    ULONGLONG uptime_ms = GetTickCount64();
+    ULONGLONG uptime_sec = uptime_ms / 1000ULL;
+    if (uptime_sec >= (ULONGLONG)min_seconds) {
+        result.passed = true;
+        result.reason = "uptime sufficient";
+    } else {
+        result.reason = "system uptime too low (sandbox indicator)";
+    }
+    return result;
+}
+
+// ---------------------------------------------------------------------------
+// CheckScreenResolution: require a minimum display size of 1280x1024.
+// Sandboxes and analyst VMs frequently use low-resolution virtual displays
+// (800x600, 1024x768) to reduce overhead. Many real corporate workstations
+// run at 1920x1080 or higher.
+// ---------------------------------------------------------------------------
+CheckResult CheckScreenResolution() {
+    CheckResult result = { false, "screen resolution check failed" };
+    int cx = GetSystemMetrics(SM_CXSCREEN);
+    int cy = GetSystemMetrics(SM_CYSCREEN);
+    if (cx >= 1280 && cy >= 1024) {
+        result.passed = true;
+        result.reason = "screen resolution sufficient";
+    } else {
+        result.reason = "screen resolution too low (sandbox indicator)";
+    }
+    return result;
+}
+
+// ---------------------------------------------------------------------------
+// CheckSecureBoot: read the UEFI Secure Boot state from the registry.
+// Modern managed corporate endpoints have Secure Boot enabled. Most
+// sandbox VMs and analyst machines disable it for driver/kernel flexibility.
+// Registry path: HKLM\SYSTEM\CurrentControlSet\Control\SecureBoot\State
+// Value name:    UEFISecureBootEnabled (DWORD, 1 = enabled)
+// If the key does not exist we treat it as a sandbox indicator; if the
+// read fails due to access rights we pass (benefit of the doubt).
+// ---------------------------------------------------------------------------
+CheckResult CheckSecureBoot() {
+    CheckResult result = { false, "secure boot check failed" };
+    HKEY hKey = nullptr;
+    LONG rc = RegOpenKeyExA(
+        HKEY_LOCAL_MACHINE,
+        "SYSTEM\\CurrentControlSet\\Control\\SecureBoot\\State",
+        0, KEY_QUERY_VALUE, &hKey);
+    if (rc != ERROR_SUCCESS) {
+        // Key absent = BIOS/legacy mode or disabled Secure Boot.
+        result.reason = "Secure Boot registry key absent (sandbox indicator)";
+        return result;
+    }
+    DWORD value = 0;
+    DWORD size = sizeof(value);
+    rc = RegQueryValueExA(hKey, "UEFISecureBootEnabled", nullptr, nullptr,
+                          (LPBYTE)&value, &size);
+    RegCloseKey(hKey);
+    if (rc != ERROR_SUCCESS) {
+        // Value missing: Secure Boot not configured.
+        result.reason = "Secure Boot value absent (sandbox indicator)";
+        return result;
+    }
+    if (value == 1) {
+        result.passed = true;
+        result.reason = "Secure Boot is enabled";
+    } else {
+        result.reason = "Secure Boot is disabled (sandbox indicator)";
+    }
     return result;
 }
 

