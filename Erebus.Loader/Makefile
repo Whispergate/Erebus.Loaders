@@ -229,7 +229,7 @@ x86-xll:
 TEST_LDFLAGS := -g -static -static-libgcc -static-libstdc++ -Wl,--gc-sections -mconsole
 
 # Test target - builds and optionally runs the test suite
-TEST_CFLAGS := -g -O0 -D_DEBUG -Wall -I"$(CURDIR)/include" $(MINGW_INCLUDE) $(ARCH_FLAGS) -masm=intel -ffunction-sections -fdata-sections -DCONFIG_INJECTION_TYPE=0
+TEST_CFLAGS := -g -O0 -D_DEBUG -Wall -I"$(CURDIR)/include" $(MINGW_INCLUDE) $(ARCH_FLAGS) -masm=intel -ffunction-sections -fdata-sections -DCONFIG_INJECTION_TYPE=0 -DCONFIG_SYSCALL_BACKEND=0 -DCONFIG_CALLSTACK_SPOOF_ENABLED=0
 TEST_DLL_CFLAGS := $(TEST_CFLAGS) -DBUILD_DLL
 TEST_DLL_LDFLAGS := $(TEST_LDFLAGS) -shared -Wl,--subsystem,windows
 ifneq ($(DEF_LINK),)
@@ -280,7 +280,7 @@ test-guardrails:
 
 # Test specific injection method
 # Usage: make test-injection INJECTION_TYPE=2
-INJECTION_TEST_CFLAGS := -g -O0 -D_DEBUG -Wall -I"$(CURDIR)/include" $(MINGW_INCLUDE) $(ARCH_FLAGS) -masm=intel -ffunction-sections -fdata-sections -DCONFIG_INJECTION_TYPE=$(INJECTION_TYPE) -DCONFIG_ENCRYPTION_TYPE=$(ENCRYPTION_TYPE)
+INJECTION_TEST_CFLAGS := -g -O0 -D_DEBUG -Wall -I"$(CURDIR)/include" $(MINGW_INCLUDE) $(ARCH_FLAGS) -masm=intel -ffunction-sections -fdata-sections -DCONFIG_INJECTION_TYPE=$(INJECTION_TYPE) -DCONFIG_ENCRYPTION_TYPE=$(ENCRYPTION_TYPE) -DCONFIG_SYSCALL_BACKEND=0 -DCONFIG_CALLSTACK_SPOOF_ENABLED=0
 INJECTION_TEST_OUT := erebus_injection_test.exe
 INJECTION_TEST_DLL_OUT := erebus_injection_test.dll
 INJECTION_TEST_DLL_CFLAGS := $(INJECTION_TEST_CFLAGS) -DBUILD_DLL
