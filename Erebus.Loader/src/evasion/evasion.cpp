@@ -169,6 +169,9 @@ namespace evasion {
             erebus::HashStringFowlerNollVoVariant1a("NtCreateSection"),
             erebus::HashStringFowlerNollVoVariant1a("NtMapViewOfSection"),
             erebus::HashStringFowlerNollVoVariant1a("NtOpenSection"),
+            erebus::HashStringFowlerNollVoVariant1a("NtQueueApcThread"),
+            erebus::HashStringFowlerNollVoVariant1a("NtResumeThread"),
+            erebus::HashStringFowlerNollVoVariant1a("NtClose"),
         };
         UnhookSelective(kSelectiveHashes, sizeof(kSelectiveHashes) / sizeof(kSelectiveHashes[0]));
 #endif
