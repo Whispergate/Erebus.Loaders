@@ -40,7 +40,8 @@ endif
 
 BUILD	?= release
 TARGET	?= exe
-INJECTION_TYPE ?= 3
+INJECTION_TYPE  ?= 3
+ENCRYPTION_TYPE ?= 0
 ARCH    ?= x64
 
 # Common Flags for Loader/Shellcode stability
@@ -279,7 +280,7 @@ test-guardrails:
 
 # Test specific injection method
 # Usage: make test-injection INJECTION_TYPE=2
-INJECTION_TEST_CFLAGS := -g -O0 -D_DEBUG -Wall -I"$(CURDIR)/include" $(MINGW_INCLUDE) $(ARCH_FLAGS) -masm=intel -ffunction-sections -fdata-sections -DCONFIG_INJECTION_TYPE=$(INJECTION_TYPE)
+INJECTION_TEST_CFLAGS := -g -O0 -D_DEBUG -Wall -I"$(CURDIR)/include" $(MINGW_INCLUDE) $(ARCH_FLAGS) -masm=intel -ffunction-sections -fdata-sections -DCONFIG_INJECTION_TYPE=$(INJECTION_TYPE) -DCONFIG_ENCRYPTION_TYPE=$(ENCRYPTION_TYPE)
 INJECTION_TEST_OUT := erebus_injection_test.exe
 INJECTION_TEST_DLL_OUT := erebus_injection_test.dll
 INJECTION_TEST_DLL_CFLAGS := $(INJECTION_TEST_CFLAGS) -DBUILD_DLL
