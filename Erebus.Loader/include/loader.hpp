@@ -72,7 +72,9 @@
 #pragma region [typedefs]
 
 // Only define these if winternl.h hasn't been included already
-// winternl.h defines many of these same structures
+// winternl.h defines many of these same structures.
+// Note: VMLoader builds shadow /usr/share/mingw-w64/include/winternl.h with an
+// empty include/winternl.h so the system header is never processed there.
 #ifndef _WINTERNL_
 
 // PROCESSOR_NUMBER is in winnt.h (windows.h), skip if already defined
@@ -1430,6 +1432,13 @@ typedef struct _IO_STATUS_BLOCK
 	ULONG_PTR Information;
 } IO_STATUS_BLOCK, * PIO_STATUS_BLOCK;
 
+// Sentinel: set when this block ran (i.e. MinGW / no pre-existing winternl.h).
+// TUs that also #include <winternl.h> should guard that include with
+//   #ifndef EREBUS_NT_TYPES_DEFINED / #include <winternl.h> / #endif
+// to avoid redefinition errors when the MinGW system winternl.h (pragma-once
+// only, no _WINTERNL_ macro guard) would otherwise re-emit these types.
+#define EREBUS_NT_TYPES_DEFINED 1
+
 #endif // _WINTERNL_ - Types after this point are not in standard winternl.h
 
 // These types are not in winternl.h. They DO overlap with the SysWhispers3
@@ -2226,6 +2235,52 @@ typedef NTSTATUS(NTAPI* typeRtlInitUnicodeString)(
 typedef NTSTATUS(NTAPI* typeRtlCreateUnicodeString)(
 	_Out_ PUNICODE_STRING DestinationString,
 	_In_opt_z_ PCWSTR SourceString
+	);
+
+typedef NTSTATUS(NTAPI* typeNtCreateMutant)(
+	_Out_ PHANDLE MutantHandle,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_In_ BOOLEAN InitialOwner
+	);
+
+// TimerType: 0 = NotificationTimer (manual-reset), 1 = SynchronizationTimer (auto-reset)
+typedef NTSTATUS(NTAPI* typeNtCreateTimer)(
+	_Out_ PHANDLE TimerHandle,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_In_ ULONG TimerType
+	);
+
+// TimerApcRoutine / TimerContext may be NULL for non-APC usage.
+typedef NTSTATUS(NTAPI* typeNtSetTimer)(
+	_In_ HANDLE TimerHandle,
+	_In_ PLARGE_INTEGER DueTime,
+	_In_opt_ PVOID TimerApcRoutine,
+	_In_opt_ PVOID TimerContext,
+	_In_ BOOLEAN WakeTimer,
+	_In_opt_ LONG Period,
+	_Out_opt_ PBOOLEAN PreviousState
+	);
+
+// MapType: MAP_PROCESS=1 (working-set lock), MAP_SYSTEM=2 (physical lock, needs privilege)
+typedef NTSTATUS(NTAPI* typeNtLockVirtualMemory)(
+	_In_ HANDLE ProcessHandle,
+	_Inout_ PVOID* BaseAddress,
+	_Inout_ PSIZE_T RegionSize,
+	_In_ ULONG MapType
+	);
+
+typedef NTSTATUS(NTAPI* typeNtUnlockVirtualMemory)(
+	_In_ HANDLE ProcessHandle,
+	_Inout_ PVOID* BaseAddress,
+	_Inout_ PSIZE_T RegionSize,
+	_In_ ULONG MapType
+	);
+
+typedef NTSTATUS(NTAPI* typeNtQueryPerformanceCounter)(
+	_Out_ PLARGE_INTEGER PerformanceCounter,
+	_Out_opt_ PLARGE_INTEGER PerformanceFrequency
 	);
 
 #endif // EREBUS_SKIP_NT_EXTENSIONS
