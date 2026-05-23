@@ -487,7 +487,7 @@ namespace erebus {
 		LOG_INFO("Shellcode will execute when thread pool worker dequeues the packet");
 		LOG_INFO("========================================");
 
-		// Jittered delay for thread pool dequeue — avoids fixed timing signatures
+		// Jittered delay for thread pool dequeue - avoids fixed timing signatures
 		Sleep(1500 + (GetTickCount() % 1000));
 
 	cleanup:

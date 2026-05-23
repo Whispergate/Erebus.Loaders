@@ -98,24 +98,46 @@ namespace Erebus.ClickOnce
         public static bool GuardrailsEnabled = false;
 
         /// <summary>
-        /// Check if process is being debugged
+        /// Runtime debug logging toggle. When true, DebugLogger.WriteLine
+        /// emits to stdout regardless of build configuration. Never ship
+        /// with this enabled.
+        /// </summary>
+        public static bool DebugLoggingEnabled = false;
+
+        /// <summary>
+        /// Check if process is being debugged (IsDebuggerPresent +
+        /// Debugger.IsAttached).
         /// </summary>
         public static bool CheckDebugger = false;
 
         /// <summary>
-        /// Check for debugger processes
+        /// Check for remote debuggers via CheckRemoteDebuggerPresent and
+        /// NtQueryInformationProcess(ProcessDebugPort).
+        /// </summary>
+        public static bool CheckRemoteDebugger = false;
+
+        /// <summary>
+        /// Check for debugger / analysis processes in the BlockedProcesses
+        /// list.
         /// </summary>
         public static bool CheckDebuggerProcesses = false;
 
         /// <summary>
-        /// Check for hardware breakpoints
+        /// Check for hardware breakpoints via GetThreadContext against
+        /// Dr0-Dr3 and their enable bits in Dr7.
         /// </summary>
         public static bool CheckHardwareBreakpoints = false;
 
         /// <summary>
-        /// Check for timing anomalies
+        /// Check for timing anomalies (single-stepping detection).
         /// </summary>
         public static bool CheckTiming = false;
+
+        /// <summary>
+        /// Check for sandbox-indicative environment signals (CPU / RAM /
+        /// disk size / recent-activity folder population).
+        /// </summary>
+        public static bool CheckSandboxEnvironment = false;
 
         /// <summary>
         /// List of blocked debugger/analysis processes

