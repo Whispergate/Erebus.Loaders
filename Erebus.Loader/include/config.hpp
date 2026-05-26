@@ -253,6 +253,7 @@
 // 1 = PatchAmsiScanBuffer (existing PatchAmsi())
 // 2 = PatchAmsiScanBuffer + PatchAmsiOpenSession
 // 3 = All + InvalidateAmsiContext
+// 4 = Patchless (Dr0 HW-BP + VEH at AmsiScanBuffer, no byte patches)
 #ifndef CONFIG_AMSI_BYPASS_TYPE
 #define CONFIG_AMSI_BYPASS_TYPE 1
 #endif
