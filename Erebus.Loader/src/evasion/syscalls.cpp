@@ -229,6 +229,12 @@ namespace evasion {
         // the function being called. Post-flip, the shims are executed
         // by jumping to the in-ntdll gadget, which is where syscalls
         // legitimately live.
+        //
+        // Under ACG (e.g. Electron/VSCode extension host), VirtualAlloc'd
+        // pages can never be made executable. Capture the NTSTATUS and
+        // bail out cleanly so callers fall back to GetProcAddressC rather
+        // than receiving a non-executable shim pointer that crashes on use.
+        BOOL rx_ok = FALSE;
         HMODULE nt2 = ImportModule("ntdll.dll");
         if (nt2) {
             ImportFunction(nt2, NtProtectVirtualMemory, typeNtProtectVirtualMemory);
@@ -236,14 +242,20 @@ namespace evasion {
                 PVOID base = g_shim_page;
                 SIZE_T region = alloc_size;
                 ULONG oldProtect = 0;
-                NtProtectVirtualMemory(
+                NTSTATUS st = NtProtectVirtualMemory(
                     (HANDLE)(LONG_PTR)-1,
                     &base,
                     &region,
                     PAGE_EXECUTE_READ,
                     &oldProtect
                 );
+                rx_ok = NT_SUCCESS(st);
             }
+        }
+        if (!rx_ok) {
+            VirtualFree(g_shim_page, 0, MEM_RELEASE);
+            g_shim_page = NULL;
+            return FALSE;
         }
 
         g_initialised = TRUE;

