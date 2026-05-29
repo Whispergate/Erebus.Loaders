@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Source Files\Shared Evasion">
+      <UniqueIdentifier>{C1D2E3F4-A5B6-7890-C1D2-E3F4A5B67890}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Shared Helpers">
+      <UniqueIdentifier>{D2E3F4A5-B6C7-8901-D2E3-F4A5B6C78901}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\VMLoader">
+      <UniqueIdentifier>{E3F4A5B6-C7D8-9012-E3F4-A5B6C7D89012}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Shared">
+      <UniqueIdentifier>{F4A5B6C7-D8E9-0123-F4A5-B6C7D8E90123}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Makefile" />
+    <None Include="builder\vmloader_builder.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\embedded.h">
+      <Filter>Header Files\VMLoader</Filter>
+    </ClInclude>
+    <ClInclude Include="include\vm_loader.hpp">
+      <Filter>Header Files\VMLoader</Filter>
+    </ClInclude>
+    <ClInclude Include="include\vmloader.hpp">
+      <Filter>Header Files\VMLoader</Filter>
+    </ClInclude>
+    <ClInclude Include="include\winternl.h">
+      <Filter>Header Files\VMLoader</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Erebus.Loader\include\config.hpp">
+      <Filter>Header Files\Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Erebus.Loader\include\loader.hpp">
+      <Filter>Header Files\Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Erebus.Loader\include\evasion\evasion.hpp">
+      <Filter>Header Files\Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Erebus.Loader\include\evasion\syscalls.hpp">
+      <Filter>Header Files\Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Erebus.Loader\include\evasion\syscall_backend.hpp">
+      <Filter>Header Files\Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Erebus.Loader\include\evasion\amsi_bypass.hpp">
+      <Filter>Header Files\Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Erebus.Loader\include\evasion\etw_bypass.hpp">
+      <Filter>Header Files\Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Erebus.Loader\include\evasion\sleep_obfuscation.hpp">
+      <Filter>Header Files\Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Erebus.Loader\include\evasion\callstack_spoof.hpp">
+      <Filter>Header Files\Shared</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Erebus.Loader\src\helpers\peb_helpers.cpp">
+      <Filter>Source Files\Shared Helpers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Erebus.Loader\src\helpers\api_hashing.cpp">
+      <Filter>Source Files\Shared Helpers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Erebus.Loader\src\evasion\evasion.cpp">
+      <Filter>Source Files\Shared Evasion</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Erebus.Loader\src\evasion\ntdll_unhook.cpp">
+      <Filter>Source Files\Shared Evasion</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Erebus.Loader\src\evasion\amsi_bypass.cpp">
+      <Filter>Source Files\Shared Evasion</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Erebus.Loader\src\evasion\etw_bypass.cpp">
+      <Filter>Source Files\Shared Evasion</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Erebus.Loader\src\evasion\syscalls.cpp">
+      <Filter>Source Files\Shared Evasion</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Erebus.Loader\src\evasion\sleep_obfuscation.cpp">
+      <Filter>Source Files\Shared Evasion</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

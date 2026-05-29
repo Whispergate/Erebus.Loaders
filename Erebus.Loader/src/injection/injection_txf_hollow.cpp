@@ -156,12 +156,19 @@ namespace erebus {
 			return;
 		}
 
-		fnCreateTransaction       pCreateTransaction       = (fnCreateTransaction)      GetProcAddress(ktmw32, "CreateTransaction");
-		fnRollbackTransaction     pRollbackTransaction     = (fnRollbackTransaction)    GetProcAddress(ktmw32, "RollbackTransaction");
-		fnCreateFileTransactedW   pCreateFileTransactedW   = (fnCreateFileTransactedW)  GetProcAddress(ktmw32, "CreateFileTransactedW");
+		fnCreateTransaction       pCreateTransaction       = (fnCreateTransaction)     GetProcAddress(ktmw32, "CreateTransaction");
+		fnRollbackTransaction     pRollbackTransaction     = (fnRollbackTransaction)   GetProcAddress(ktmw32, "RollbackTransaction");
+
+		// CreateFileTransactedW lives in kernel32.dll, not ktmw32.dll.
+		HMODULE kernel32 = ImportModule("kernel32.dll");
+		fnCreateFileTransactedW pCreateFileTransactedW = kernel32
+			? (fnCreateFileTransactedW)erebus::GetProcAddressC(kernel32, H("CreateFileTransactedW"))
+			: nullptr;
 
 		if (!pCreateTransaction || !pRollbackTransaction || !pCreateFileTransactedW) {
-			LOG_ERROR("Failed to resolve KTMW32 exports");
+			LOG_ERROR("Failed to resolve TxF exports (ktmw32: CT=%p RT=%p / kernel32: CFT=%p)",
+			          (void*)pCreateTransaction, (void*)pRollbackTransaction,
+			          (void*)pCreateFileTransactedW);
 			FreeLibrary(ktmw32);
 			return;
 		}

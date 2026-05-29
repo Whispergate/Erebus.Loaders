@@ -21,32 +21,32 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{f9fdc410-eea7-4d03-8fd0-e624455fc099}</ProjectGuid>
-    <RootNamespace>ErebusLoader</RootNamespace>
+    <ProjectGuid>{A1B2C3D4-E5F6-7890-ABCD-EF1234567891}</ProjectGuid>
+    <RootNamespace>ErebusVMLoader</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v145</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v145</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -54,7 +54,6 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.props" />
   </ImportGroup>
   <ImportGroup Label="Shared">
   </ImportGroup>
@@ -71,24 +70,23 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(ProjectDir)include;$(IncludePath)</IncludePath>
-    <SourcePath>$(VC_SourcePath);$(ProjectDir)src;$(SourcePath)</SourcePath>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(ProjectDir)include;$(IncludePath)</IncludePath>
+  <PropertyGroup>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(ProjectDir)include;$(ProjectDir)..\Erebus.Loader\include;$(IncludePath)</IncludePath>
     <SourcePath>$(VC_SourcePath);$(ProjectDir)src;$(SourcePath)</SourcePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <SDLCheck>false</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;BUILD_DLL;CONFIG_INJECTION_TYPE=2;CONFIG_INJECTION_MODE=2;CONFIG_ENCRYPTION_TYPE=0;CONFIG_SYSCALL_BACKEND=0;CONFIG_SLEEP_OBFUSCATION_TYPE=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>iphlpapi.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -96,26 +94,32 @@
       <WarningLevel>Level3</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <SDLCheck>false</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;BUILD_DLL;CONFIG_INJECTION_TYPE=2;CONFIG_INJECTION_MODE=2;CONFIG_ENCRYPTION_TYPE=0;CONFIG_SYSCALL_BACKEND=0;CONFIG_SLEEP_OBFUSCATION_TYPE=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <Optimization>MinSpace</Optimization>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <AdditionalDependencies>iphlpapi.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <SDLCheck>false</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;BUILD_DLL;CONFIG_INJECTION_TYPE=2;CONFIG_INJECTION_MODE=2;CONFIG_ENCRYPTION_TYPE=0;CONFIG_SYSCALL_BACKEND=0;CONFIG_SLEEP_OBFUSCATION_TYPE=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>iphlpapi.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -123,81 +127,50 @@
       <WarningLevel>Level3</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <SDLCheck>false</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;BUILD_DLL;CONFIG_INJECTION_TYPE=2;CONFIG_INJECTION_MODE=2;CONFIG_ENCRYPTION_TYPE=0;CONFIG_SYSCALL_BACKEND=0;CONFIG_SLEEP_OBFUSCATION_TYPE=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <Optimization>MinSpace</Optimization>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <AdditionalDependencies>iphlpapi.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <None Include="Makefile" />
+    <None Include="builder\vmloader_builder.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\config.hpp" />
-    <ClInclude Include="include\evasion\callstack_spoof.hpp" />
-    <ClInclude Include="include\evasion\evasion.hpp" />
-    <ClInclude Include="include\evasion\sw3\Syscalls.h" />
-    <ClInclude Include="include\evasion\sw3\SysWhispers.h" />
-    <ClInclude Include="include\evasion\syscall_backend.hpp" />
-    <ClInclude Include="include\evasion\syscalls.hpp" />
-    <ClInclude Include="include\guardrails\guardrails.hpp" />
-    <ClInclude Include="include\injection\injection_createfiber.hpp" />
-    <ClInclude Include="include\injection\injection_dispatch.hpp" />
-    <ClInclude Include="include\injection\injection_earlycascade.hpp" />
-    <ClInclude Include="include\injection\injection_ntmapviewofsection.hpp" />
-    <ClInclude Include="include\injection\injection_ntqueueapcthread.hpp" />
-    <ClInclude Include="include\injection\injection_poolparty.hpp" />
-    <ClInclude Include="include\loader.hpp" />
-    <ClInclude Include="include\resource.h" />
-    <ClInclude Include="include\shellcode.hpp" />
-    <ClInclude Include="resource.h" />
+    <ClInclude Include="include\embedded.h" />
+    <ClInclude Include="include\vm_loader.hpp" />
+    <ClInclude Include="include\vmloader.hpp" />
+    <ClInclude Include="include\winternl.h" />
+    <ClInclude Include="..\Erebus.Loader\include\config.hpp" />
+    <ClInclude Include="..\Erebus.Loader\include\loader.hpp" />
+    <ClInclude Include="..\Erebus.Loader\include\evasion\evasion.hpp" />
+    <ClInclude Include="..\Erebus.Loader\include\evasion\syscalls.hpp" />
+    <ClInclude Include="..\Erebus.Loader\include\evasion\syscall_backend.hpp" />
+    <ClInclude Include="..\Erebus.Loader\include\evasion\amsi_bypass.hpp" />
+    <ClInclude Include="..\Erebus.Loader\include\evasion\etw_bypass.hpp" />
+    <ClInclude Include="..\Erebus.Loader\include\evasion\sleep_obfuscation.hpp" />
+    <ClInclude Include="..\Erebus.Loader\include\evasion\callstack_spoof.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\evasion\amsi_bypass.cpp" />
-    <ClCompile Include="src\evasion\callstack_spoof.cpp" />
-    <ClCompile Include="src\evasion\etw_bypass.cpp" />
-    <ClCompile Include="src\evasion\evasion.cpp" />
-    <ClCompile Include="src\evasion\ntdll_unhook.cpp" />
-    <ClCompile Include="src\evasion\sleep_obfuscation.cpp" />
-    <ClCompile Include="src\evasion\sw3_backend.cpp" />
-    <ClCompile Include="src\evasion\unhook_extended.cpp" />
-    <ClCompile Include="src\evasion\Syscalls.c">
-      <AdditionalIncludeDirectories>$(ProjectDir)include\evasion\sw3;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <ObjectFileName>$(IntDir)SysWhispers3.obj</ObjectFileName>
-    </ClCompile>
-    <ClCompile Include="src\evasion\syscalls.cpp" />
-    <ClCompile Include="src\guardrails\guardrails.cpp" />
-    <ClCompile Include="src\injection\injection_createfiber.cpp" />
-    <ClCompile Include="src\injection\injection_earlycascade.cpp" />
-    <ClCompile Include="src\injection\injection_ntmapviewofsection.cpp" />
-    <ClCompile Include="src\injection\injection_ntqueueapcthread.cpp" />
-    <ClCompile Include="src\injection\injection_kernelcallback.cpp" />
-    <ClCompile Include="src\injection\injection_module_stomp.cpp" />
-    <ClCompile Include="src\injection\injection_poolparty.cpp" />
-    <ClCompile Include="src\injection\injection_txf_hollow.cpp" />
-    <ClCompile Include="src\helpers\api_hashing.cpp" />
-    <ClCompile Include="src\helpers\compression_helpers.cpp" />
-    <ClCompile Include="src\helpers\crypto_helpers.cpp" />
-    <ClCompile Include="src\helpers\peb_helpers.cpp" />
-    <ClCompile Include="src\helpers\process_helpers.cpp" />
-    <ClCompile Include="src\loader.cpp" />
     <ClCompile Include="src\main.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <MASM Include="src\evasion\callstack_spoof.asm" />
-    <MASM Include="src\evasion\Syscalls-asm.x64.asm">
-      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
-    </MASM>
-    <MASM Include="src\evasion\Syscalls-asm.x86.asm">
-      <ExcludedFromBuild Condition="'$(Platform)'=='x64'">true</ExcludedFromBuild>
-    </MASM>
+    <ClCompile Include="..\Erebus.Loader\src\helpers\peb_helpers.cpp" />
+    <ClCompile Include="..\Erebus.Loader\src\helpers\api_hashing.cpp" />
+    <ClCompile Include="..\Erebus.Loader\src\evasion\evasion.cpp" />
+    <ClCompile Include="..\Erebus.Loader\src\evasion\ntdll_unhook.cpp" />
+    <ClCompile Include="..\Erebus.Loader\src\evasion\amsi_bypass.cpp" />
+    <ClCompile Include="..\Erebus.Loader\src\evasion\etw_bypass.cpp" />
+    <ClCompile Include="..\Erebus.Loader\src\evasion\syscalls.cpp" />
+    <ClCompile Include="..\Erebus.Loader\src\evasion\sleep_obfuscation.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />
   </ImportGroup>
 </Project>
