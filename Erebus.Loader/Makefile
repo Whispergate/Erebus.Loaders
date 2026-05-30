@@ -138,6 +138,9 @@ OBJS := $(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS)))
 CONFIG_SYSCALL_BACKEND        ?= 0
 CONFIG_CALLSTACK_SPOOF_ENABLED ?= 0
 
+ifeq ($(CONFIG_SYSCALL_BACKEND),0)
+    CFLAGS   += -DCONFIG_SYSCALL_BACKEND=0
+endif
 ifeq ($(CONFIG_SYSCALL_BACKEND),1)
     CFLAGS   += -DCONFIG_SYSCALL_BACKEND=1
     SW3_C_SRC := src/evasion/Syscalls.c
@@ -151,6 +154,25 @@ ifeq ($(CONFIG_SYSCALL_BACKEND),1)
     # force-include the SE_SIGNING_LEVEL shim since MinGW's winnt.h omits
     # that typedef while SysWhispers3 references it.
     $(SW3_C_OBJ): CFLAGS += -Wa,-msyntax=intel,-mnaked-reg -Iinclude/evasion/sw3 -include include/evasion/sw3/se_signing_level_shim.h
+endif
+ifeq ($(CONFIG_SYSCALL_BACKEND),2)
+    # Heaven's Gate - 32-bit WoW64 syscall via CS:0x33 far jump.
+    # Requires ARCH=x86. heavens_gate.S is AT&T-syntax with .intel_syntax
+    # preamble; assemble with plain $(CC) -m32.
+    ifneq ($(ARCH),x86)
+        $(error Heaven's Gate (CONFIG_SYSCALL_BACKEND=2) requires ARCH=x86)
+    endif
+    CFLAGS       += -DCONFIG_SYSCALL_BACKEND=2
+    HG_CPP_SRC   := src/evasion/heavens_gate.cpp
+    HG_S_SRC     := src/evasion/heavens_gate.S
+    HG_CPP_OBJ   := $(HG_CPP_SRC:.cpp=.o)
+    HG_S_OBJ     := $(HG_S_SRC:.S=.o)
+    OBJS         += $(HG_CPP_OBJ) $(HG_S_OBJ)
+    # heavens_gate.S contains both .code32 and .code64 directives and
+    # must be assembled as a 32-bit object that happens to contain 64-bit
+    # code islands. -m32 keeps the object ABI correct; the .code64 section
+    # is inert to the linker - it is jumped to at runtime via far ret.
+    $(HG_S_OBJ): CFLAGS += -Wa,-msyntax=intel,-mnaked-reg
 endif
 ifeq ($(CONFIG_CALLSTACK_SPOOF_ENABLED),1)
     CFLAGS   += -DCONFIG_CALLSTACK_SPOOF_ENABLED=1

