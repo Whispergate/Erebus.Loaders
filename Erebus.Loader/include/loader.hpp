@@ -12,6 +12,7 @@
 #include "injection/injection_createfiber.hpp"
 #include "injection/injection_earlycascade.hpp"
 #include "injection/injection_poolparty.hpp"
+#include "injection/injection_poolparty_jobapc.hpp"
 #include "injection/injection_module_stomp.hpp"
 #include "injection/injection_kernelcallback.hpp"
 #include "injection/injection_txf_hollow.hpp"

@@ -1,4 +1,4 @@
-# Detect operating system/environment
+﻿# Detect operating system/environment
 ifeq ($(OS),Windows_NT)
 	# Running on Windows (native or MSYS2/MinGW)
 	DETECTED_OS := Windows
@@ -329,6 +329,7 @@ define INJECTION_TEST_COMPILE
 	$(CC) $($(1)) -c src/injection/injection_createfiber.cpp -o src/injection/injection_createfiber.o
 	$(CC) $($(1)) -c src/injection/injection_earlycascade.cpp -o src/injection/injection_earlycascade.o
 	$(CC) $($(1)) -c src/injection/injection_poolparty.cpp -o src/injection/injection_poolparty.o
+	$(CC) $($(1)) -c src/injection/injection_poolparty_jobapc.cpp -o src/injection/injection_poolparty_jobapc.o
 	$(CC) $($(1)) -c src/injection/injection_ntqueueapcthread.cpp -o src/injection/injection_ntqueueapcthread.o
 	$(CC) $($(1)) -c src/injection/injection_module_stomp.cpp -o src/injection/injection_module_stomp.o
 	$(CC) $($(1)) -c src/injection/injection_kernelcallback.cpp -o src/injection/injection_kernelcallback.o
@@ -389,101 +390,110 @@ test-all-injections:
 # XLL format is only meaningful for self-injection techniques (no suspended
 # target process in those host contexts), so XLL coverage is limited to
 # self-injection types: 2 (CreateFiber), 3 (EarlyCascade), 6 (ModuleStomp), 7 (KernelCallbackTable).
+# Type 9 (TpJobObjectApc) is remote only â€“ no XLL variant.
 PAYLOADS_DIR := $(CURDIR)/payloads
 test-all: test-all-payloads
 test-all-payloads:
 	@echo "=== Building all test payloads ==="
 	@mkdir -p $(PAYLOADS_DIR)
 	@echo ""
-	@echo "[1/23] Building general test EXE..."
+	@echo "[1/25] Building general test EXE..."
 	$(MAKE) clean
 	$(MAKE) test
 	@mv $(TEST_OUT) $(PAYLOADS_DIR)/
-	@echo "[2/23] Building general test DLL..."
+	@echo "[2/25] Building general test DLL..."
 	$(MAKE) clean
 	$(MAKE) test-dll
 	@mv $(TEST_DLL_OUT) $(PAYLOADS_DIR)/
-	@echo "[3/23] Building guardrails test EXE..."
+	@echo "[3/25] Building guardrails test EXE..."
 	$(MAKE) clean
 	$(MAKE) test-guardrails
 	@mv $(GUARDRAILS_TEST_OUT) $(PAYLOADS_DIR)/
-	@echo "[4/23] Building injection test EXE (TYPE=1 - NtMapViewOfSection, remote)..."
+	@echo "[4/25] Building injection test EXE (TYPE=1 - NtMapViewOfSection, remote)..."
 	$(MAKE) clean
 	$(MAKE) test-injection INJECTION_TYPE=1
 	@mv $(INJECTION_TEST_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type1.exe
-	@echo "[5/23] Building injection test DLL (TYPE=1 - NtMapViewOfSection, remote)..."
+	@echo "[5/25] Building injection test DLL (TYPE=1 - NtMapViewOfSection, remote)..."
 	$(MAKE) clean
 	$(MAKE) test-injection-dll INJECTION_TYPE=1
 	@mv $(INJECTION_TEST_DLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type1.dll
-	@echo "[6/23] Building injection test EXE (TYPE=2 - CreateFiber, self)..."
+	@echo "[6/25] Building injection test EXE (TYPE=2 - CreateFiber, self)..."
 	$(MAKE) clean
 	$(MAKE) test-injection INJECTION_TYPE=2
 	@mv $(INJECTION_TEST_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type2.exe
-	@echo "[7/23] Building injection test DLL (TYPE=2 - CreateFiber, self)..."
+	@echo "[7/25] Building injection test DLL (TYPE=2 - CreateFiber, self)..."
 	$(MAKE) clean
 	$(MAKE) test-injection-dll INJECTION_TYPE=2
 	@mv $(INJECTION_TEST_DLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type2.dll
-	@echo "[8/23] Building injection test EXE (TYPE=3 - EarlyCascade, remote)..."
+	@echo "[8/25] Building injection test EXE (TYPE=3 - EarlyCascade, remote)..."
 	$(MAKE) clean
 	$(MAKE) test-injection INJECTION_TYPE=3
 	@mv $(INJECTION_TEST_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type3.exe
-	@echo "[9/23] Building injection test DLL (TYPE=3 - EarlyCascade, remote)..."
+	@echo "[9/25] Building injection test DLL (TYPE=3 - EarlyCascade, remote)..."
 	$(MAKE) clean
 	$(MAKE) test-injection-dll INJECTION_TYPE=3
 	@mv $(INJECTION_TEST_DLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type3.dll
-	@echo "[10/23] Building injection test EXE (TYPE=4 - PoolParty, remote)..."
+	@echo "[10/25] Building injection test EXE (TYPE=4 - PoolParty, remote)..."
 	$(MAKE) clean
 	$(MAKE) test-injection INJECTION_TYPE=4
 	@mv $(INJECTION_TEST_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type4.exe
-	@echo "[11/23] Building injection test DLL (TYPE=4 - PoolParty, remote)..."
+	@echo "[11/25] Building injection test DLL (TYPE=4 - PoolParty, remote)..."
 	$(MAKE) clean
 	$(MAKE) test-injection-dll INJECTION_TYPE=4
 	@mv $(INJECTION_TEST_DLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type4.dll
-	@echo "[12/23] Building injection test EXE (TYPE=5 - NtQueueApcThread, remote)..."
+	@echo "[12/25] Building injection test EXE (TYPE=5 - NtQueueApcThread, remote)..."
 	$(MAKE) clean
 	$(MAKE) test-injection INJECTION_TYPE=5
 	@mv $(INJECTION_TEST_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type5.exe
-	@echo "[13/23] Building injection test DLL (TYPE=5 - NtQueueApcThread, remote)..."
+	@echo "[13/25] Building injection test DLL (TYPE=5 - NtQueueApcThread, remote)..."
 	$(MAKE) clean
 	$(MAKE) test-injection-dll INJECTION_TYPE=5
 	@mv $(INJECTION_TEST_DLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type5.dll
-	@echo "[14/23] Building injection test EXE (TYPE=6 - ModuleStomp, self)..."
+	@echo "[14/25] Building injection test EXE (TYPE=6 - ModuleStomp, self)..."
 	$(MAKE) clean
 	$(MAKE) test-injection INJECTION_TYPE=6
 	@mv $(INJECTION_TEST_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type6.exe
-	@echo "[15/23] Building injection test DLL (TYPE=6 - ModuleStomp, self)..."
+	@echo "[15/25] Building injection test DLL (TYPE=6 - ModuleStomp, self)..."
 	$(MAKE) clean
 	$(MAKE) test-injection-dll INJECTION_TYPE=6
 	@mv $(INJECTION_TEST_DLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type6.dll
-	@echo "[16/23] Building injection test EXE (TYPE=7 - KernelCallbackTable, self)..."
+	@echo "[16/25] Building injection test EXE (TYPE=7 - KernelCallbackTable, self)..."
 	$(MAKE) clean
 	$(MAKE) test-injection INJECTION_TYPE=7
 	@mv $(INJECTION_TEST_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type7.exe
-	@echo "[17/23] Building injection test DLL (TYPE=7 - KernelCallbackTable, self)..."
+	@echo "[17/25] Building injection test DLL (TYPE=7 - KernelCallbackTable, self)..."
 	$(MAKE) clean
 	$(MAKE) test-injection-dll INJECTION_TYPE=7
 	@mv $(INJECTION_TEST_DLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type7.dll
-	@echo "[18/23] Building injection test EXE (TYPE=8 - TxfHollow, remote)..."
+	@echo "[18/25] Building injection test EXE (TYPE=8 - TxfHollow, remote)..."
 	$(MAKE) clean
 	$(MAKE) test-injection INJECTION_TYPE=8
 	@mv $(INJECTION_TEST_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type8.exe
-	@echo "[19/23] Building injection test DLL (TYPE=8 - TxfHollow, remote)..."
+	@echo "[19/25] Building injection test DLL (TYPE=8 - TxfHollow, remote)..."
 	$(MAKE) clean
 	$(MAKE) test-injection-dll INJECTION_TYPE=8
 	@mv $(INJECTION_TEST_DLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type8.dll
-	@echo "[20/23] Building injection test XLL (TYPE=2 - CreateFiber, self)..."
+	@echo "[20/25] Building injection test EXE (TYPE=9 - TpJobObjectApc, remote)..."
+	$(MAKE) clean
+	$(MAKE) test-injection INJECTION_TYPE=9
+	@mv $(INJECTION_TEST_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type9.exe
+	@echo "[21/25] Building injection test DLL (TYPE=9 - TpJobObjectApc, remote)..."
+	$(MAKE) clean
+	$(MAKE) test-injection-dll INJECTION_TYPE=9
+	@mv $(INJECTION_TEST_DLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type9.dll
+	@echo "[22/25] Building injection test XLL (TYPE=2 - CreateFiber, self)..."
 	$(MAKE) clean
 	$(MAKE) test-injection-xll INJECTION_TYPE=2
 	@mv $(INJECTION_TEST_XLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type2.xll
-	@echo "[21/23] Building injection test XLL (TYPE=3 - EarlyCascade, remote)..."
+	@echo "[23/25] Building injection test XLL (TYPE=3 - EarlyCascade, remote)..."
 	$(MAKE) clean
 	$(MAKE) test-injection-xll INJECTION_TYPE=3
 	@mv $(INJECTION_TEST_XLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type3.xll
-	@echo "[22/23] Building injection test XLL (TYPE=6 - ModuleStomp, self)..."
+	@echo "[24/25] Building injection test XLL (TYPE=6 - ModuleStomp, self)..."
 	$(MAKE) clean
 	$(MAKE) test-injection-xll INJECTION_TYPE=6
 	@mv $(INJECTION_TEST_XLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type6.xll
-	@echo "[23/23] Building injection test XLL (TYPE=7 - KernelCallbackTable, self)..."
+	@echo "[25/25] Building injection test XLL (TYPE=7 - KernelCallbackTable, self)..."
 	$(MAKE) clean
 	$(MAKE) test-injection-xll INJECTION_TYPE=7
 	@mv $(INJECTION_TEST_XLL_OUT) $(PAYLOADS_DIR)/erebus_injection_test_type7.xll

@@ -270,14 +270,6 @@ static HANDLE HijackWorkerFactoryHandle(IN HANDLE hTargetProcess) {
     return HijackProcessHandle(hTargetProcess, L"TpWorkerFactory", WORKER_FACTORY_ALL_ACCESS);
 }
 
-// Returns TRUE if the target process has an active Windows thread pool
-// (i.e. at least one IoCompletion handle exists in its handle table).
-static BOOL ProcessHasThreadPool(IN HANDLE hProcess) {
-    HANDLE h = HijackIoCompletionHandle(hProcess);
-    if (h) { CloseHandle(h); return TRUE; }
-    return FALSE;
-}
-
 } // namespace erebus
 
 #endif // CONFIG_INJECTION_TYPE == 4 || CONFIG_INJECTION_TYPE == 9

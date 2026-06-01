@@ -33,6 +33,13 @@
 namespace erebus {
 #if CONFIG_INJECTION_TYPE == 4
 
+    // Declared in injection_poolparty.hpp for use by main.cpp CONFIG_INJECTION_MODE==3.
+    BOOL ProcessHasThreadPool(IN HANDLE hProcess) {
+        HANDLE h = HijackIoCompletionHandle(hProcess);
+        if (h) { CloseHandle(h); return TRUE; }
+        return FALSE;
+    }
+
     /**
      * @brief PoolParty RemoteTpDirectInsertion injection.
      *
