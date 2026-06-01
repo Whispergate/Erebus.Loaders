@@ -23,6 +23,8 @@ namespace erebus {
 		return &InjectionKernelCallback;
 	#elif CONFIG_INJECTION_TYPE == 8
 		return &InjectionTxfHollow;
+	#elif CONFIG_INJECTION_TYPE == 9
+		return &InjectionPoolPartyJobApc;
 	#else
 		return nullptr;
 	#endif
