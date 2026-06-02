@@ -276,11 +276,12 @@
 // ============================================
 
 // Unhook scope:
-// 0 = ntdll only (existing UnhookNtdll())
-// 1 = ntdll + kernel32 + kernelbase
-// 2 = selective (list of hashed function names)
+// 0 = None     - skip all NTDLL unhooking
+// 1 = ntdll    - overlay ntdll .text with clean KnownDlls copy
+// 2 = Extended - ntdll + kernel32 + KernelBase
+// 3 = Selective - per-function prologue restore for Nt* injection stubs
 #ifndef CONFIG_UNHOOK_SCOPE
-#define CONFIG_UNHOOK_SCOPE 0
+#define CONFIG_UNHOOK_SCOPE 1
 #endif
 
 // ============================================
