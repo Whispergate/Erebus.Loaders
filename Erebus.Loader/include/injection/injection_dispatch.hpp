@@ -25,6 +25,10 @@ namespace erebus {
 		return &InjectionTxfHollow;
 	#elif CONFIG_INJECTION_TYPE == 9
 		return &InjectionPoolPartyJobApc;
+	#elif CONFIG_INJECTION_TYPE == 10
+		return &InjectionProcessHollow;
+	#elif CONFIG_INJECTION_TYPE == 11
+		return &InjectionFunctionStomp;
 	#else
 		return nullptr;
 	#endif

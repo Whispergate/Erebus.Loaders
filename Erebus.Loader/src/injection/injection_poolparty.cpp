@@ -20,7 +20,7 @@
  *   6. A thread pool worker dequeues the packet and invokes the callback
  *
  * ApcContext == NULL distinguishes TP_DIRECT dispatch from TP_JOB dispatch
- * (the latter requires a non-zero JOB_OBJECT_MSG_* value — see type 9).
+ * (the latter requires a non-zero JOB_OBJECT_MSG_* value - see type 9).
  *
  * Target requirements: process must have an active Windows thread pool
  * (IoCompletion handle present).  The implementation resumes the thread and

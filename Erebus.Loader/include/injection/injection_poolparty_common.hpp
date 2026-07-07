@@ -105,7 +105,7 @@ typedef struct _PP_TP_TASK {
     // Total: 0x20 bytes on x64
 } PP_TP_TASK, *PPP_TP_TASK;
 
-// TP_DIRECT — RemoteTpDirectInsertion (type 4).
+// TP_DIRECT - RemoteTpDirectInsertion (type 4).
 // ApcContext must be NULL; Callback lives at offset 0x30.
 typedef struct _PP_TP_DIRECT {
     PP_TP_TASK Task;                      // +0x00 (0x20)
@@ -117,7 +117,7 @@ typedef struct _PP_TP_DIRECT {
     char       Padding[3];                 // +0x45
 } PP_TP_DIRECT, *PPP_TP_DIRECT;
 
-// TP_JOB — TpJobObjectApc (type 9).
+// TP_JOB - TpJobObjectApc (type 9).
 // ApcContext must be JOB_OBJECT_MSG_* for the thread pool dispatcher to route
 // the dequeued packet through TpJobNotifications; Callback lives at 0x50.
 typedef struct _PP_TP_JOB {

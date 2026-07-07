@@ -1,5 +1,5 @@
 /*
- * heavens_gate.S  —  Heaven's Gate 32→64 syscall thunk (GAS / MinGW x86)
+ * heavens_gate.S  -  Heaven's Gate 32→64 syscall thunk (GAS / MinGW x86)
  *
  * Assembled only when CONFIG_SYSCALL_BACKEND=2 and ARCH=x86.
  *
@@ -61,7 +61,7 @@ _hg_get_rip:
     pop     ecx
     add     ecx, (_hg_64bit_entry - _hg_get_rip)   /* ecx = address of _hg_64bit_entry */
     push    ecx                    /* low 32 bits of target offset */
-    /* Stack now: [target_lo32] [0x33] — a 48-bit far pointer. */
+    /* Stack now: [target_lo32] [0x33] - a 48-bit far pointer. */
     /* Use retf to do the far jump: pops EIP then CS. */
     retf                           /* -> mode switches to 64-bit, CS=0x33 */
 

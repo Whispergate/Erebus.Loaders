@@ -16,6 +16,8 @@
 #include "injection/injection_module_stomp.hpp"
 #include "injection/injection_kernelcallback.hpp"
 #include "injection/injection_txf_hollow.hpp"
+#include "injection/injection_process_hollow.hpp"
+#include "injection/injection_function_stomp.hpp"
 #include <cmath>
 
 #if CONFIG_CALLSTACK_SPOOF_ENABLED

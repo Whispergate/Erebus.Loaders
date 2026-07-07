@@ -1,6 +1,6 @@
 /**
  * @file heavens_gate.cpp
- * @brief Heaven's Gate syscall backend — 32-bit loader issuing native 64-bit syscalls.
+ * @brief Heaven's Gate syscall backend - 32-bit loader issuing native 64-bit syscalls.
  *
  * Active only when CONFIG_SYSCALL_BACKEND == 2 and ARCH == x86.
  *
@@ -189,7 +189,7 @@ static const SIZE_T g_hv_count = sizeof(g_hv) / sizeof(g_hv[0]);
 //   pop  ecx                  ; save return address (1)
 //   push imm32 ssn            ; push ssn as first arg (5)
 //   push ecx                  ; restore return address (1)
-//   jmp  _HvGateCall          ; tail-call (5)  — rel32 patched at plant time
+//   jmp  _HvGateCall          ; tail-call (5)  - rel32 patched at plant time
 //   (2 bytes padding / nop)
 static const SIZE_T HV_STUB_SIZE = 14;
 static PBYTE        g_hv_page    = NULL;

